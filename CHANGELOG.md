@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2
+- LICENSE is now the plain MIT text, so GitHub and HACS recognise it
+  (the Bk-Light-AppBypass credit stays in NOTICE.md and the README).
+
+## 0.6.1
+- Captions in English and Polish: follow Home Assistant's language, or `language: en|pl` in `show_icon`.
+- README gallery in English, Polish copy in `images/pictures_pl.png`.
+
 ## 0.6.0
 - Aurora forecast (`show_aurora`) from the NOAA SWPC Kp forecast, old and new data formats.
 - Adjustable animation pace (`frame_interval`).

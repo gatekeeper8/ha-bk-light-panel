@@ -49,7 +49,7 @@ from .const import (
 )
 from .aircraft import pick_nearest, render_aircraft
 from .aurora import DEFAULT_URL as AURORA_URL, next_hours, render_aurora, summary
-from .icons import ANIMATED, render_icon, season_for
+from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .panel import BkLightPanel
 from .render import (
     apply_tint,
@@ -103,6 +103,7 @@ SHOW_ICON_SCHEMA = vol.Schema(
         vol.Optional(ATTR_CAPTION_COLOR): COLOR,
         vol.Optional(ATTR_DURATION, default=0): vol.All(vol.Coerce(float), vol.Range(0, 60)),
         vol.Optional("frame_interval", default=1.5): vol.All(vol.Coerce(float), vol.Range(0, 10)),
+        vol.Optional("language"): vol.In(LANGUAGES),
     }
 )
 SHOW_CLOCK_SCHEMA = vol.Schema(
@@ -251,9 +252,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         caption = call.data.get(ATTR_CAPTION)
         brightness = call.data[ATTR_BRIGHTNESS]
 
+        # captions follow Home Assistant's language unless one is given
+        lang = call.data.get("language") or language_for(hass.config.language)
+
         def frame_png(frame: int) -> bytes:
             return to_png(
-                render_icon(name, caption, call.data.get(ATTR_CAPTION_COLOR), frame),
+                render_icon(name, caption, call.data.get(ATTR_CAPTION_COLOR), frame, lang=lang),
                 brightness,
             )
 

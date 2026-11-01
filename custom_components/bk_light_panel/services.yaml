@@ -143,6 +143,12 @@ show_icon:
           step: 0.5
           unit_of_measurement: s
           mode: box
+    language:
+      selector:
+        select:
+          options:
+            - en
+            - pl
     brightness:
       default: 100
       selector:

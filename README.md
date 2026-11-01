@@ -30,6 +30,10 @@ an aurora forecast, alerts and your own images.
 
 ![Pictures](images/pictures.png)
 
+Automatic captions (moon phase, "charging") follow your Home Assistant language:
+English, or Polish ([Polish gallery](images/pictures_pl.png)). Force one with
+`language: en` / `language: pl` in `show_icon`.
+
 ## Requirements
 
 - Home Assistant **2026.1 or newer** (developed and used on 2026.10).
@@ -136,8 +140,9 @@ Change the entity names at the top of the file to yours.
 - **Stored animations**: when nothing is connected, the panel plays the animations
   saved by its phone app. The integration therefore stays connected. To be safe,
   delete the saved programs in the app once.
-- The moon phase names and the heating caption are currently in Polish (e.g. *PEŁNIA*,
-  *ŁADUJE*). Translations are welcome.
+- Captions exist in English and Polish. More languages are welcome: add them to
+  `MOON_NAMES`, `CHARGING` and `SEASON_NAMES` in `icons.py` (every word must fit in
+  32 pixels; a test checks it).
 - Debug logging:
   ```yaml
   logger:
