@@ -1,0 +1,20 @@
+# Changelog
+
+## 0.6.0
+- Aurora forecast (`show_aurora`) from the NOAA SWPC Kp forecast, old and new data formats.
+- Adjustable animation pace (`frame_interval`).
+- Stays connected; restores the picture after a dropped connection; identical frames are not re-sent.
+- Night tint for the clock.
+
+## 0.4.0
+- Flip clock with flip animation.
+- Nearest aircraft with the flag of the country of registration.
+
+## 0.3.0
+- Smooth graphics (supersampled, gradients, glow), big-digit clock, nearest aircraft from ADS-B.
+
+## 0.2.0
+- Built-in weather, moon, season, smog and heating pictures.
+
+## 0.1.0
+- First version: text, colours, images over Bluetooth.

@@ -1,0 +1,41 @@
+"""Constants for the BK-Light LED panel integration."""
+
+DOMAIN = "bk_light_panel"
+
+# Panel size (ACT1026 = 32 x 32)
+PANEL_WIDTH = 32
+PANEL_HEIGHT = 32
+
+# Stay connected all the time (None). When nothing is connected, the panel
+# falls back to the animations stored in it by its phone app, so a
+# disconnect would bring those back. A number = disconnect after that many
+# idle seconds (frees the proxy's connection slot, but the animations return).
+IDLE_DISCONNECT_SECONDS: int | None = None
+
+# After an unexpected disconnect, reconnect and put the last picture back
+# after these delays (seconds), so the stored animations show only briefly.
+RECOVER_DELAYS = (2, 10, 30, 60, 120)
+
+CONF_ADDRESS = "address"
+
+SERVICE_SHOW_TEXT = "show_text"
+SERVICE_FILL = "fill"
+SERVICE_SHOW_IMAGE = "show_image"
+SERVICE_CLEAR = "clear"
+SERVICE_SHOW_ICON = "show_icon"
+SERVICE_SHOW_CLOCK = "show_clock"
+SERVICE_SHOW_AIRCRAFT = "show_nearest_aircraft"
+
+ATTR_PANEL = "panel"
+ATTR_TEXT = "text"
+ATTR_COLOR = "color"
+ATTR_BACKGROUND = "background"
+ATTR_LINE_COLORS = "line_colors"
+ATTR_SCALE = "scale"
+ATTR_BRIGHTNESS = "brightness"
+ATTR_PATH = "path"
+ATTR_FIT = "fit"
+ATTR_ICON = "icon"
+ATTR_CAPTION = "caption"
+ATTR_CAPTION_COLOR = "caption_color"
+ATTR_DURATION = "duration"

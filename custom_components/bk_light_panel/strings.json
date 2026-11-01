@@ -1,0 +1,286 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Choose the LED panel to add, or enter its address by hand.",
+        "data": {
+          "address": "Panel"
+        }
+      },
+      "bluetooth_confirm": {
+        "description": "Add the LED panel {name}?"
+      },
+      "manual": {
+        "description": "Enter the panel's Bluetooth address (for example AA:BB:CC:DD:EE:FF). You find it in Settings - Bluetooth - Advertisement monitor.",
+        "data": {
+          "address": "Bluetooth address"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This panel is already set up."
+    },
+    "error": {
+      "invalid_address": "That is not a valid Bluetooth address (format AA:BB:CC:DD:EE:FF)."
+    }
+  },
+  "services": {
+    "show_text": {
+      "name": "Show text",
+      "description": "Show centred text on the panel. Use a new line for more lines (up to 5 at scale 1).",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "Text to show. New lines start a new row."
+        },
+        "color": {
+          "name": "Colour",
+          "description": "Text colour (default white)."
+        },
+        "background": {
+          "name": "Background",
+          "description": "Background colour (default black)."
+        },
+        "line_colors": {
+          "name": "Line colours",
+          "description": "Optional colour per line, for example [[255,160,0],[0,200,255]]."
+        },
+        "scale": {
+          "name": "Size",
+          "description": "1 = small (8 characters per line), 2 = large (4 per line)."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        }
+      }
+    },
+    "fill": {
+      "name": "Fill colour",
+      "description": "Fill the whole panel with one colour.",
+      "fields": {
+        "color": {
+          "name": "Colour",
+          "description": "Fill colour."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        }
+      }
+    },
+    "show_image": {
+      "name": "Show image",
+      "description": "Show a picture file (PNG, JPG, GIF first frame) scaled to the panel.",
+      "fields": {
+        "path": {
+          "name": "File",
+          "description": "Path to the picture, for example /config/www/panel/ghost.png."
+        },
+        "fit": {
+          "name": "Fit",
+          "description": "contain = whole picture, cover = fill and crop, stretch = distort to fit."
+        },
+        "background": {
+          "name": "Background",
+          "description": "Colour around the picture (default black)."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        }
+      }
+    },
+    "clear": {
+      "name": "Clear",
+      "description": "Make the panel black.",
+      "fields": {
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        }
+      }
+    },
+    "show_icon": {
+      "name": "Show picture",
+      "description": "Show a built-in 32x32 picture: a weather state (use the state of a weather entity), moon (today's phase), season (today's season) or autumn/winter/spring/summer. Rain, snow and falling leaves can be animated.",
+      "fields": {
+        "icon": {
+          "name": "Picture",
+          "description": "Weather state (sunny, rainy, ...), moon, season, autumn, winter, spring, summer, smog or heating."
+        },
+        "caption": {
+          "name": "Caption",
+          "description": "Short text under the picture, e.g. 12°C. Moon shows its phase name when left empty."
+        },
+        "caption_color": {
+          "name": "Caption colour",
+          "description": "Caption colour (default white)."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds to keep the picture (the action waits this long). Rain, snow and falling leaves move meanwhile. 0 = just send it."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames. The panel needs time to show each frame; too fast makes it lag behind. 0 = still picture."
+        }
+      }
+    },
+    "show_clock": {
+      "name": "Show clock",
+      "description": "Clock face: large HH:MM, two small lines below and an optional level bar (e.g. PM2.5).",
+      "fields": {
+        "time": {
+          "name": "Time",
+          "description": "Text for the big digits, e.g. 17:36. Default: current time."
+        },
+        "time_color": {
+          "name": "Time colour",
+          "description": "Colour of the big digits."
+        },
+        "line1": {
+          "name": "Line 1",
+          "description": "First small line, e.g. 9.6°C."
+        },
+        "line1_color": {
+          "name": "Line 1 colour",
+          "description": "Colour of line 1."
+        },
+        "line2": {
+          "name": "Line 2",
+          "description": "Second small line, e.g. PM 12."
+        },
+        "line2_color": {
+          "name": "Line 2 colour",
+          "description": "Colour of line 2."
+        },
+        "bar_value": {
+          "name": "Bar value",
+          "description": "Value for the bar at the bottom (green to red). Empty = no bar."
+        },
+        "bar_max": {
+          "name": "Bar maximum",
+          "description": "Value that fills the whole bar (default 75)."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        },
+        "style": {
+          "name": "Style",
+          "description": "classic = large digits; flip = split-flap cards like an old flip clock."
+        },
+        "animate": {
+          "name": "Animate flip",
+          "description": "Flip style: play the card flip when the time changes."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show the whole clock in one colour, e.g. red at night. Empty = normal colours."
+        }
+      }
+    },
+    "show_nearest_aircraft": {
+      "name": "Show nearest aircraft",
+      "description": "Read ADS-B data (aircraft.json from readsb, dump1090 or tar1090) and show the closest plane: silhouette in its direction of flight, callsign/type, altitude and distance. Returns the plane's data; nothing is shown if no plane is in range.",
+      "fields": {
+        "url": {
+          "name": "Data URL",
+          "description": "Address of aircraft.json, e.g. http://192.168.1.50:8080/data/aircraft.json."
+        },
+        "max_distance": {
+          "name": "Maximum distance",
+          "description": "Ignore planes further away than this (km)."
+        },
+        "latitude": {
+          "name": "Latitude",
+          "description": "Your position. Default: the home location in Home Assistant."
+        },
+        "longitude": {
+          "name": "Longitude",
+          "description": "Your position. Default: the home location in Home Assistant."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds to show the plane (animated)."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames. The panel needs time to show each frame; too fast makes it lag behind. 0 = still picture."
+        }
+      }
+    },
+    "show_aurora": {
+      "name": "Show aurora forecast",
+      "description": "NOAA geomagnetic (Kp) forecast for the next 24 hours: moving aurora, bars per 3 hours, peak and its time. Returns the forecast; draws only when the peak reaches the minimum Kp.",
+      "fields": {
+        "url": {
+          "name": "Forecast URL",
+          "description": "NOAA SWPC Kp forecast JSON (default is fine)."
+        },
+        "min_kp": {
+          "name": "Minimum Kp",
+          "description": "Only show the picture if the forecast peak reaches this Kp (0 = always)."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds to show the picture."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Panel name or address. Only needed with more than one panel."
+        },
+        "show": {
+          "name": "Show on panel",
+          "description": "Off = only return the forecast (for sensors and automations), draw nothing."
+        }
+      }
+    }
+  }
+}

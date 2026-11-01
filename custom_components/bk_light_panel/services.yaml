@@ -1,0 +1,324 @@
+show_text:
+  fields:
+    text:
+      required: true
+      example: "21:45\n12°C"
+      selector:
+        text:
+          multiline: true
+    color:
+      example: [255, 160, 0]
+      selector:
+        color_rgb:
+    background:
+      selector:
+        color_rgb:
+    line_colors:
+      example: [[255, 160, 0], [0, 200, 255]]
+      selector:
+        object:
+    scale:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+fill:
+  fields:
+    color:
+      required: true
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+show_image:
+  fields:
+    path:
+      required: true
+      example: /config/www/panel/ghost.png
+      selector:
+        text:
+    fit:
+      default: contain
+      selector:
+        select:
+          options:
+            - contain
+            - cover
+            - stretch
+    background:
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+clear:
+  fields:
+    panel:
+      selector:
+        text:
+
+show_icon:
+  fields:
+    icon:
+      required: true
+      example: "{{ states('weather.forecast_home') }}"
+      selector:
+        select:
+          custom_value: true
+          options:
+            - "season"
+            - "moon"
+            - "autumn"
+            - "winter"
+            - "spring"
+            - "summer"
+            - "sunny"
+            - "clear-night"
+            - "partlycloudy"
+            - "cloudy"
+            - "rainy"
+            - "pouring"
+            - "snowy"
+            - "snowy-rainy"
+            - "hail"
+            - "lightning"
+            - "lightning-rainy"
+            - "fog"
+            - "windy"
+            - "windy-variant"
+            - "exceptional"
+            - "smog"
+            - "heating"
+    caption:
+      example: "12°C"
+      selector:
+        text:
+    caption_color:
+      selector:
+        color_rgb:
+    duration:
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: s
+          mode: box
+    frame_interval:
+      default: 1.5
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.5
+          unit_of_measurement: s
+          mode: box
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+show_clock:
+  fields:
+    time:
+      example: "17:36"
+      selector:
+        text:
+    time_color:
+      selector:
+        color_rgb:
+    line1:
+      example: "9.6°C"
+      selector:
+        text:
+    line1_color:
+      selector:
+        color_rgb:
+    line2:
+      example: "PM 12"
+      selector:
+        text:
+    line2_color:
+      selector:
+        color_rgb:
+    bar_value:
+      example: 12
+      selector:
+        number:
+          min: 0
+          max: 500
+          mode: box
+    bar_max:
+      default: 75
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+    style:
+      default: classic
+      selector:
+        select:
+          options:
+            - classic
+            - flip
+    animate:
+      default: true
+      selector:
+        boolean:
+    tint:
+      example: [255, 30, 0]
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+show_nearest_aircraft:
+  fields:
+    url:
+      required: true
+      example: "http://192.168.1.50:8080/data/aircraft.json"
+      selector:
+        text:
+    max_distance:
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 500
+          unit_of_measurement: km
+          mode: box
+    latitude:
+      selector:
+        number:
+          min: -90
+          max: 90
+          step: any
+          mode: box
+    longitude:
+      selector:
+        number:
+          min: -180
+          max: 180
+          step: any
+          mode: box
+    duration:
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: s
+          mode: box
+    frame_interval:
+      default: 1.5
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.5
+          unit_of_measurement: s
+          mode: box
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+show_aurora:
+  fields:
+    url:
+      example: "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
+      selector:
+        text:
+    min_kp:
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 9
+          step: 0.5
+          mode: box
+    show:
+      default: true
+      selector:
+        boolean:
+    duration:
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: s
+          mode: box
+    frame_interval:
+      default: 1.5
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.5
+          unit_of_measurement: s
+          mode: box
+    tint:
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:

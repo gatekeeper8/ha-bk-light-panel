@@ -1,0 +1,525 @@
+# LED panel (BK-Light 32x32) - status display
+# Example package: copy to /config/packages/led_panel.yaml
+# (configuration.yaml: homeassistant: packages: !include_dir_named packages)
+# Needs the bk_light_panel integration 0.6.0 or newer.
+#
+# CLOCK most of the time: flip-clock cards (or classic big digits, helper
+#   "LED panel - clock style"), outdoor temperature, PM2.5 with a coloured
+#   level bar. Tariff colour (green = cheap G12, coral = expensive) on the
+#   card hinges / classic digits. Dim at night.
+# PICTURES in rotation: one every 30 s by default for 8 s (helper
+#   "LED panel - picture every"), at :15 / :45 - never across the full
+#   minute, so the clock flip is never interrupted. Cycling through:
+#     weather + temperature, nearest plane (ADS-B), moon (after dark),
+#     season, and the alerts while active (smog above the limit,
+#     storage heaters charging).
+# ALERTS also show at once when they start.
+# NEAREST PLANE: put the address of your aircraft.json into the helper
+#   "LED panel - ADS-B data URL", e.g.
+#     http://<readsb-or-tar1090-host>:8080/data/aircraft.json
+#   Empty = the plane is left out. Range: "LED panel - plane range".
+# NIGHT (22:00 until 6:00 on working days, 7:00 on days off - workday
+#   sensor, so public holidays count as days off): clock only, all red,
+#   low brightness, no pictures, no alerts (the clock still flips).
+# AURORA: NOAA Kp forecast (sensor "Aurora Kp max 24h", every 30 min).
+#   Daytime rotation: the aurora picture joins when Kp >= 5 is forecast
+#   in the next 24 h. Night: it breaks through, red and dim, every 5 min
+#   when Kp >= 6 now or in the next 3 h (then it may be visible here).
+#   Phone notification (notify.notify) once per day, from noon, when
+#   Kp >= 6 is forecast for tonight (18:00-06:00).
+# OFF ("LED panel - status display" off): the screen is kept black; the
+#   panel stays connected so its own stored animations never come back.
+# HAUNTED HOUSE: spooky clock, BOO! on corridor scares, no pictures.
+#
+# Entities used (check the names against yours):
+#   sensor.outdoor_temperature, sensor.outdoor_pm2_5,
+#   weather.forecast_home, sun.sun,
+#   switch.storage_heater_charging (optional: e.g. a storage-heater charging relay),
+#   input_boolean.haunted_house / haunted_scare (haunted package)
+
+input_boolean:
+  led_panel_display:
+    name: LED panel - status display
+    icon: mdi:led-strip-variant
+
+input_number:
+  led_panel_pm25_alert:
+    name: LED panel - PM2.5 alert limit
+    min: 10
+    max: 150
+    step: 5
+    initial: 35
+    unit_of_measurement: "µg/m³"
+    icon: mdi:smog
+  led_panel_plane_range:
+    name: LED panel - plane range
+    min: 5
+    max: 300
+    step: 5
+    initial: 80
+    unit_of_measurement: km
+    icon: mdi:radar
+
+input_select:
+  led_panel_rotation:
+    name: LED panel - picture every
+    options:
+      - "30 s"
+      - "20 s"
+      - "1 min"
+      - "2 min"
+      - "5 min"
+    icon: mdi:timer-sync-outline
+
+  led_panel_animation:
+    name: LED panel - animation pace
+    options:
+      - "calm (1.5 s)"
+      - "slow (2.5 s)"
+      - "smooth (0.8 s)"
+      - "still"
+    icon: mdi:animation-play-outline
+  led_panel_clock_style:
+    name: LED panel - clock style
+    options:
+      - flip
+      - classic
+    icon: mdi:clock-digital
+
+input_text:
+  led_panel_adsb_url:
+    name: LED panel - ADS-B data URL
+    max: 255
+    icon: mdi:airplane
+
+counter:
+  led_panel_slot:
+    name: LED panel - rotation position
+    initial: 0
+    step: 1
+
+template:
+  # NOAA Kp forecast via the panel integration (cached, nothing is drawn)
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/30"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay:
+          seconds: 30  # after a restart, give the integration time to load
+      - action: bk_light_panel.show_aurora
+        continue_on_error: true
+        response_variable: aurora
+        data:
+          show: false
+    sensor:
+      - name: Aurora Kp max 24h
+        unique_id: aurora_kp_max_24h
+        icon: mdi:weather-night
+        state_class: measurement
+        state: "{{ aurora.max_kp if aurora is defined and aurora.max_kp is not none else none }}"
+        attributes:
+          peak_time: "{{ aurora.peak_time if aurora is defined else none }}"
+          kp_next_24h: "{{ aurora.kp if aurora is defined else [] }}"
+          kp_now_3h: "{{ (aurora.kp[:2] | max) if aurora is defined and aurora.kp else none }}"
+          # tonight = 18:00 until 06:00 (after midnight: now until 06:00)
+          kp_tonight_max: >-
+            {% set ns = namespace(best=none, at=none) %}
+            {% if aurora is defined and aurora.kp %}
+              {% set s0 = utcnow().replace(minute=0, second=0, microsecond=0) %}
+              {% set s0 = s0 - timedelta(hours=s0.hour % 3) %}
+              {% set dark_from = today_at('18:00') if now().hour >= 6 else today_at('00:00') - timedelta(hours=6) %}
+              {% set dark_to = today_at('06:00') + timedelta(days=1 if now().hour >= 6 else 0) %}
+              {% for k in aurora.kp %}
+                {% set start = (s0 + timedelta(hours=3 * loop.index0)) | as_local %}
+                {% if start + timedelta(hours=3) > dark_from and start < dark_to and (ns.best is none or k > ns.best) %}
+                  {% set ns.best = k %}{% set ns.at = start.strftime('%H:%M') %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.best }}
+          kp_tonight_time: >-
+            {% set ns = namespace(best=none, at=none) %}
+            {% if aurora is defined and aurora.kp %}
+              {% set s0 = utcnow().replace(minute=0, second=0, microsecond=0) %}
+              {% set s0 = s0 - timedelta(hours=s0.hour % 3) %}
+              {% set dark_from = today_at('18:00') if now().hour >= 6 else today_at('00:00') - timedelta(hours=6) %}
+              {% set dark_to = today_at('06:00') + timedelta(days=1 if now().hour >= 6 else 0) %}
+              {% for k in aurora.kp %}
+                {% set start = (s0 + timedelta(hours=3 * loop.index0)) | as_local %}
+                {% if start + timedelta(hours=3) > dark_from and start < dark_to and (ns.best is none or k > ns.best) %}
+                  {% set ns.best = k %}{% set ns.at = start.strftime('%H:%M') %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.at }}
+  - binary_sensor:
+      - name: LED panel night
+        unique_id: led_panel_night
+        icon: mdi:weather-night
+        state: >-
+          {% set wd = is_state('binary_sensor.workday_sensor', 'on')
+                      if states('binary_sensor.workday_sensor') in ['on', 'off']
+                      else now().weekday() < 5 %}
+          {{ now().hour >= 22 or now().hour < (6 if wd else 7) }}
+
+script:
+  # ------------------------------------------------------------ clock
+  led_panel_status:
+    alias: LED panel - show status
+    mode: queued
+    max: 2
+    sequence:
+      - variables:
+          temp: "{{ states('sensor.outdoor_temperature') }}"
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
+          haunted: "{{ is_state('input_boolean.haunted_house', 'on') }}"
+          night: "{{ is_state('binary_sensor.led_panel_night', 'on') and not haunted }}"
+          wd: >-
+            {% if states('binary_sensor.workday_sensor') in ['on', 'off'] %}
+              {{ is_state('binary_sensor.workday_sensor', 'on') }}
+            {% else %}
+              {{ now().weekday() < 5 }}
+            {% endif %}
+          cheap: >-
+            {% set h = now().hour %}
+            {{ h >= 22 or h < 6 or (wd and 13 <= h < 15) }}
+          pm_color: >-
+            {%- if not is_number(pm) -%} [120, 120, 120]
+            {%- elif pm | float < 15 -%} [0, 220, 90]
+            {%- elif pm | float < 35 -%} [255, 210, 0]
+            {%- elif pm | float < 55 -%} [255, 120, 0]
+            {%- else -%} [255, 30, 30]
+            {%- endif -%}
+      - action: bk_light_panel.show_clock
+        data:
+          style: "{{ 'classic' if is_state('input_select.led_panel_clock_style', 'classic') else 'flip' }}"
+          tint: "{{ [255, 25, 0] if night else none }}"
+          time_color: >-
+            {%- if haunted -%} [60, 255, 60]
+            {%- elif cheap -%} [120, 230, 140]
+            {%- else -%} [255, 150, 110]
+            {%- endif -%}
+          line1: "{{ (temp | float | round(1) ~ '°C') if is_number(temp) else '--°C' }}"
+          line1_color: "{{ [150, 0, 255] if haunted else [255, 190, 110] }}"
+          line2: "PM {{ (pm | float | round(0) | int) if is_number(pm) else '--' }}"
+          line2_color: "{{ [150, 0, 255] if haunted else pm_color }}"
+          bar_value: "{{ pm | float if is_number(pm) and not haunted else none }}"
+          bar_max: 75
+          brightness: >-
+            {%- if haunted -%} 30
+            {%- elif night -%} 15
+            {%- else -%} 60
+            {%- endif -%}
+
+  # --------------------------------------------------------- one picture
+  led_panel_picture:
+    alias: LED panel - next picture
+    mode: single
+    max_exceeded: silent
+    sequence:
+      - variables:
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
+          weather: "{{ states('weather.forecast_home') }}"
+          url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
+          slots: >-
+            {% set s = [] %}
+            {% if weather not in ['unknown', 'unavailable'] %}{% set s = s + ['weather'] %}{% endif %}
+            {% if url.startswith('http') %}{% set s = s + ['plane'] %}{% endif %}
+            {% if states('sensor.aurora_kp_max_24h') | float(0) >= 5 %}{% set s = s + ['aurora'] %}{% endif %}
+            {% if is_number(pm) and pm | float > states('input_number.led_panel_pm25_alert') | float(35) %}{% set s = s + ['smog'] %}{% endif %}
+            {% if is_state('sun.sun', 'below_horizon') %}{% set s = s + ['moon'] %}{% endif %}
+            {% if is_state('switch.storage_heater_charging', 'on') %}{% set s = s + ['heating'] %}{% endif %}
+            {{ s + ['season'] }}
+          slot: "{{ slots[states('counter.led_panel_slot') | int(0) % slots | count] }}"
+          temp: >-
+            {% set t = states('sensor.outdoor_temperature') %}
+            {% if not is_number(t) %}{% set t = state_attr('weather.forecast_home', 'temperature') %}{% endif %}
+            {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
+          bright: "{{ 10 if now().hour >= 23 or now().hour < 7 else 60 }}"
+      - action: counter.increment
+        target:
+          entity_id: counter.led_panel_slot
+      - choose:
+          - conditions: "{{ slot == 'plane' }}"
+            sequence:
+              - action: bk_light_panel.show_nearest_aircraft
+                continue_on_error: true
+                response_variable: plane
+                data:
+                  url: "{{ url }}"
+                  max_distance: "{{ states('input_number.led_panel_plane_range') | float(80) }}"
+                  duration: 8
+                  frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+                  brightness: "{{ bright }}"
+              # no plane in range (or receiver off): show the season instead
+              - if: "{{ plane is not defined or not plane.found }}"
+                then:
+                  - action: bk_light_panel.show_icon
+                    continue_on_error: true
+                    data:
+                      icon: season
+                      duration: 8
+                      frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+                      brightness: "{{ bright }}"
+          - conditions: "{{ slot == 'aurora' }}"
+            sequence:
+              - action: bk_light_panel.show_aurora
+                continue_on_error: true
+                data:
+                  duration: 8
+                  frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+                  brightness: "{{ bright }}"
+          - conditions: "{{ slot in ['smog', 'heating'] }}"
+            sequence:
+              - action: script.led_panel_alert
+                data:
+                  kind: "{{ slot }}"
+                  then_clock: false
+        default:
+          - action: bk_light_panel.show_icon
+            continue_on_error: true
+            data:
+              icon: "{{ weather if slot == 'weather' else slot }}"
+              caption: "{{ temp if slot == 'weather' else none }}"
+              caption_color: "{{ [255, 180, 100] if slot == 'weather' else [190, 190, 220] }}"
+              duration: 8
+              frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+              brightness: "{{ bright }}"
+      - action: script.led_panel_status
+
+  # ------------------------------------------------------------ alerts
+  led_panel_alert:
+    alias: LED panel - show alert
+    mode: single
+    max_exceeded: silent
+    fields:
+      kind:
+        description: smog or heating
+        example: smog
+      then_clock:
+        description: go back to the clock afterwards
+        example: true
+    sequence:
+      - variables:
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
+          bright: "{{ 10 if now().hour >= 23 or now().hour < 7 else 60 }}"
+      - action: bk_light_panel.show_icon
+        continue_on_error: true
+        data:
+          icon: "{{ kind }}"
+          caption: >-
+            {{ ('PM ' ~ (pm | float | round(0) | int)) if kind == 'smog' and is_number(pm) else 'CHARGE' if kind == 'heating' else '' }}
+          caption_color: "{{ [255, 60, 50] if kind == 'smog' else [255, 160, 60] }}"
+          duration: 8
+          frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+          brightness: "{{ bright }}"
+      - if:
+          - condition: template
+            value_template: "{{ then_clock | default(true) }}"
+        then:
+          - action: script.led_panel_status
+
+  # ------------------------------------------------------- haunted house
+  led_panel_boo:
+    alias: LED panel - BOO
+    mode: single
+    sequence:
+      - repeat:
+          count: 3
+          sequence:
+            - action: bk_light_panel.show_text
+              data:
+                text: "BOO!"
+                scale: 2
+                color: [255, 0, 0]
+                brightness: 100
+            - delay: 0.4
+            - action: bk_light_panel.clear
+            - delay: 0.3
+      - action: script.led_panel_status
+
+automation:
+  # One scheduler for everything, so the clock and pictures never send to
+  # the panel at the same time: the clock at the full minute, pictures
+  # only between :10 and :45 (they last 8 s), never across the minute.
+  # One scheduler for everything, so the clock and pictures never send to
+  # the panel at the same time: the clock at the full minute, pictures
+  # only between :10 and :45 (they last 8 s), never across the minute,
+  # and never at night. Display off = keep the screen black.
+  - id: led_panel_status_every_minute
+    alias: LED panel - scheduler
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: time_pattern
+        seconds: "/5"
+      - trigger: state
+        entity_id:
+          - input_boolean.led_panel_display
+          - input_boolean.haunted_house
+          - binary_sensor.led_panel_night
+        id: now
+    conditions:
+      # don't interrupt a BOO!, a picture or an alert started elsewhere
+      - condition: state
+        entity_id: script.led_panel_boo
+        state: "off"
+      - condition: state
+        entity_id: script.led_panel_picture
+        state: "off"
+      - condition: state
+        entity_id: script.led_panel_alert
+        state: "off"
+    actions:
+      - variables:
+          second: "{{ now().second }}"
+          minute_tick: "{{ trigger.id == 'now' or second < 5 }}"
+          every: >-
+            {{ {'20 s': 20, '30 s': 30, '1 min': 60, '2 min': 120, '5 min': 300}
+               .get(states('input_select.led_panel_rotation'), 30) }}
+          picture_due: >-
+            {{ 10 <= second <= 45
+               and ((now().timestamp() | int // 5 * 5) - 15) % every == 0
+               and is_state('input_boolean.haunted_house', 'off')
+               and is_state('binary_sensor.led_panel_night', 'off') }}
+          # night: aurora only when it may really be visible (Kp >= 6 now / next 3 h)
+          night_aurora_due: >-
+            {{ is_state('binary_sensor.led_panel_night', 'on')
+               and is_state('input_boolean.haunted_house', 'off')
+               and now().minute % 5 == 0 and 15 <= second < 20
+               and state_attr('sensor.aurora_kp_max_24h', 'kp_now_3h') | float(0) >= 6 }}
+      - choose:
+          # display off: hold a black screen (resent only after a reconnect)
+          - conditions: "{{ is_state('input_boolean.led_panel_display', 'off') }}"
+            sequence:
+              - if: "{{ minute_tick }}"
+                then:
+                  - action: bk_light_panel.clear
+                    continue_on_error: true
+          - conditions: "{{ minute_tick }}"
+            sequence:
+              - action: script.led_panel_status
+                continue_on_error: true
+          - conditions: "{{ picture_due }}"
+            sequence:
+              - action: script.led_panel_picture
+                continue_on_error: true
+          - conditions: "{{ night_aurora_due }}"
+            sequence:
+              - action: bk_light_panel.show_aurora
+                continue_on_error: true
+                data:
+                  duration: 8
+                  frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+                  tint: [255, 25, 0]
+                  brightness: 15
+              - action: script.led_panel_status
+                continue_on_error: true
+
+  - id: led_panel_alert_starts
+    alias: LED panel - alert starts
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: template
+        value_template: >-
+          {% set pm = states('sensor.outdoor_pm2_5') %}
+          {{ is_number(pm) and pm | float > states('input_number.led_panel_pm25_alert') | float(35) }}
+        for: "00:02:00"
+        id: smog
+      - trigger: state
+        entity_id: switch.storage_heater_charging
+        to: "on"
+        id: heating
+    conditions:
+      # keep clear of the minute change (clock flip)
+      - condition: template
+        value_template: "{{ 5 <= now().second <= 45 }}"
+      # no alerts at night
+      - condition: state
+        entity_id: binary_sensor.led_panel_night
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.led_panel_display
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.haunted_house
+        state: "off"
+      - condition: state
+        entity_id: script.led_panel_boo
+        state: "off"
+      - condition: state
+        entity_id: script.led_panel_picture
+        state: "off"
+    actions:
+      - action: script.led_panel_alert
+        continue_on_error: true
+        data:
+          kind: "{{ trigger.id }}"
+
+  # phone notification, at most once per day, when a visible aurora
+  # (Kp >= 6) is forecast for tonight - checked from noon until 23:00
+  - id: aurora_tonight_notification
+    alias: Aurora - notify when visible tonight
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.aurora_kp_max_24h
+        attribute: kp_tonight_max
+      - trigger: time
+        at: "16:00:00"
+    conditions:
+      - condition: time
+        after: "12:00:00"
+        before: "23:00:00"
+      - condition: template
+        value_template: "{{ state_attr('sensor.aurora_kp_max_24h', 'kp_tonight_max') | float(0) >= 6 }}"
+      - condition: template
+        value_template: >-
+          {% set last = state_attr(this.entity_id, 'last_triggered') %}
+          {{ last is none or (last | as_local).date() != now().date() }}
+    actions:
+      - action: notify.notify
+        data:
+          title: "Aurora possible tonight"
+          message: >-
+            NOAA forecast: Kp {{ state_attr('sensor.aurora_kp_max_24h', 'kp_tonight_max') | round(1) }}
+            around {{ state_attr('sensor.aurora_kp_max_24h', 'kp_tonight_time') }}.
+            Look low to the north, away from city lights.
+
+  - id: led_panel_off
+    alias: LED panel - display off
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.led_panel_display
+        to: "off"
+    actions:
+      - action: script.turn_off
+        target:
+          entity_id:
+            - script.led_panel_picture
+            - script.led_panel_alert
+      - action: bk_light_panel.clear
+
+  - id: led_panel_haunted_scare
+    alias: LED panel - haunted house BOO
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.haunted_scare
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.haunted_house
+        state: "on"
+    actions:
+      # a scare beats pictures and alerts
+      - action: script.turn_off
+        target:
+          entity_id:
+            - script.led_panel_picture
+            - script.led_panel_alert
+      - action: script.led_panel_boo

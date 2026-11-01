@@ -1,0 +1,23 @@
+{
+  "domain": "bk_light_panel",
+  "name": "BK-Light LED panel",
+  "bluetooth": [
+    {
+      "local_name": "LED_BLE_*",
+      "connectable": true
+    }
+  ],
+  "codeowners": [
+    "@gatekeeper8"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
+  "documentation": "https://github.com/gatekeeper8/ha-bk-light-panel",
+  "integration_type": "device",
+  "iot_class": "assumed_state",
+  "issue_tracker": "https://github.com/gatekeeper8/ha-bk-light-panel/issues",
+  "requirements": [],
+  "version": "0.6.0"
+}
