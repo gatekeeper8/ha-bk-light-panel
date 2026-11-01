@@ -146,6 +146,13 @@ Change the entity names at the top of the file to yours.
   ```
   shows the connection, MTU and timing of every frame.
 
+## Contributors
+
+- [gatekeeper8](https://github.com/gatekeeper8): author and maintainer: idea, hardware,
+  testing on a real panel.
+- [Claude](https://claude.ai) (Anthropic's AI assistant): co-developer: integration
+  code, graphics, tests and documentation, written together with the maintainer.
+
 ## Credits and licence
 
 - Bluetooth protocol based on
