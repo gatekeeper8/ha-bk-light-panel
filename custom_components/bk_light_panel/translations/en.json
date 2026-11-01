@@ -145,6 +145,10 @@
         "frame_interval": {
           "name": "Frame interval",
           "description": "Seconds between animation frames. The panel needs time to show each frame; too fast makes it lag behind. 0 = still picture."
+        },
+        "language": {
+          "name": "Language",
+          "description": "Language of automatic captions (moon phase, charging): en or pl. Default: Home Assistant's language."
         }
       }
     },

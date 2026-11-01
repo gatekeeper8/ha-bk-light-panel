@@ -29,7 +29,23 @@ ALERTS = {"smog", "heating"}
 ANIMATED = (WEATHER - {"exceptional"}) | SEASONS | ALERTS
 ICONS = sorted(WEATHER | SEASONS | ALERTS | {"moon", "season"})
 
-SEASON_NAMES = {"spring": "WIOSNA", "summer": "LATO", "autumn": "JESIEŃ", "winter": "ZIMA"}
+# automatic captions; every text fits the 32-pixel width of the panel
+LANGUAGES = ("en", "pl")
+MOON_NAMES = {
+    "en": ["NEW", "CRESCENT", "1ST QTR", "WAXING", "FULL", "WANING", "LAST QTR", "CRESCENT"],
+    "pl": ["NÓW", "SIERP", "I KW", "ROŚNIE", "PEŁNIA", "UBYWA", "III KW", "SIERP"],
+}
+CHARGING = {"en": "CHARGING", "pl": "ŁADUJE"}
+SEASON_NAMES = {
+    "en": {"spring": "SPRING", "summer": "SUMMER", "autumn": "AUTUMN", "winter": "WINTER"},
+    "pl": {"spring": "WIOSNA", "summer": "LATO", "autumn": "JESIEŃ", "winter": "ZIMA"},
+}
+
+
+def language_for(code: str | None) -> str:
+    """'pl', 'pl-PL' -> 'pl'; anything else -> 'en'."""
+    code = (code or "en").lower()[:2]
+    return code if code in LANGUAGES else "en"
 
 # palette
 SUN_CORE, SUN_EDGE, SUN_GLOW = (255, 248, 190), (255, 168, 0), (255, 120, 0)
@@ -140,9 +156,8 @@ def moon_phase(now: datetime | None = None) -> float:
     return (days % 29.530588853) / 29.530588853
 
 
-def moon_name(phase: float) -> str:
-    names = ["NÓW", "SIERP", "I KW", "ROŚNIE", "PEŁNIA", "UBYWA", "III KW", "SIERP"]
-    return names[int((phase * 8 + 0.5)) % 8]
+def moon_name(phase: float, lang: str = "en") -> str:
+    return MOON_NAMES[language_for(lang)][int((phase * 8 + 0.5)) % 8]
 
 
 _MARIA = ((-0.30, -0.25, 0.28), (0.15, -0.35, 0.18), (0.10, 0.20, 0.30), (-0.35, 0.30, 0.16), (0.42, 0.05, 0.12))
@@ -436,11 +451,12 @@ def render_icon(
     caption_color=None,
     frame: int = 0,
     now: datetime | None = None,
+    lang: str = "en",
 ) -> Image.Image:
     """Draw one picture. 'season' and 'moon' work out today's season / phase.
 
-    caption None = automatic (moon phase name, "ŁADUJE" for heating),
-    "" = no caption.
+    caption None = automatic (moon phase name, "CHARGING" for heating) in
+    the given language (en / pl); "" = no caption.
     """
     name = (name or "").lower().strip()
     if name == "season":
@@ -463,13 +479,13 @@ def render_icon(
         phase = moon_phase(now)
         _moon(c, phase, 16, 12.5, 11)
         if caption is None:
-            caption = moon_name(phase)
+            caption = moon_name(phase, lang)
     elif name == "smog":
         _smog(c, frame)
     elif name == "heating":
         _heating(c, frame)
         if caption is None:
-            caption = "ŁADUJE"
+            caption = CHARGING[language_for(lang)]
     else:
         _weather(c, name, frame)
 

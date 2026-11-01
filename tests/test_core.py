@@ -206,7 +206,8 @@ def test_moon_phase_known_dates():
     # the mean cycle is within about a day of the real moon (1 day = 0.034)
     assert abs(full - 0.5) < 0.034
     assert min(new, 1 - new) < 0.034
-    assert icons.moon_name(full) == "PEŁNIA"
+    assert icons.moon_name(full) == "FULL"
+    assert icons.moon_name(full, "pl") == "PEŁNIA"
 
 
 def test_season():
@@ -337,3 +338,14 @@ def test_aurora_picture():
     assert first.size == (32, 32) and first.tobytes() != later.tobytes()
     assert len(render.to_png(first)) < 2500
     assert aurora.render_aurora([], 0).size == (32, 32)
+
+
+def test_captions_in_both_languages_fit_the_panel():
+    for lang in icons.LANGUAGES:
+        words = icons.MOON_NAMES[lang] + [icons.CHARGING[lang]] + list(icons.SEASON_NAMES[lang].values())
+        for word in words:
+            assert render.text_width(word) <= 32, (lang, word)
+    assert icons.language_for("pl-PL") == "pl" and icons.language_for("de") == "en" and icons.language_for(None) == "en"
+    en = icons.render_icon("heating", None, frame=0, lang="en")
+    pl = icons.render_icon("heating", None, frame=0, lang="pl")
+    assert en.tobytes() != pl.tobytes()

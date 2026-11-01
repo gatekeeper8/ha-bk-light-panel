@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+- Captions in English and Polish: follow Home Assistant's language, or `language: en|pl` in `show_icon`.
+- README gallery in English, Polish copy in `images/pictures_pl.png`.
+
 ## 0.6.0
 - Aurora forecast (`show_aurora`) from the NOAA SWPC Kp forecast, old and new data formats.
 - Adjustable animation pace (`frame_interval`).
