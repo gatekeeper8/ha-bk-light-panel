@@ -149,6 +149,10 @@
         "language": {
           "name": "Language",
           "description": "Language of automatic captions (moon phase, charging): en or pl. Default: Home Assistant's language."
+        },
+        "night": {
+          "name": "Night version",
+          "description": "Moon and stars instead of the sun (sunny, partly cloudy, summer). Default: automatic, after sunset (sun.sun)."
         }
       }
     },

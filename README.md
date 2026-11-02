@@ -16,7 +16,8 @@ an aurora forecast, alerts and your own images.
   single-colour **tint** (e.g. red at night).
 - **Built-in pictures**, drawn smoothly with gradients and glow: all Home Assistant
   weather states, the current **moon phase**, the **season** (falling leaves, snow,
-  flowers, summer sea), **smog** and **heating** alerts. Most of them are animated.
+  flowers, summer sea), **smog** and **heating** alerts. Most of them are animated,
+  and after sunset the sun is replaced by the moon ([night versions](images/night_pictures.png)).
 - **Nearest aircraft**: reads `aircraft.json` from readsb / dump1090 / tar1090 and
   shows the closest plane pointing in its direction of flight, its callsign or type,
   altitude, distance and the **flag of its country of registration** (from the ICAO

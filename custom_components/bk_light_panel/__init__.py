@@ -104,6 +104,7 @@ SHOW_ICON_SCHEMA = vol.Schema(
         vol.Optional(ATTR_DURATION, default=0): vol.All(vol.Coerce(float), vol.Range(0, 60)),
         vol.Optional("frame_interval", default=1.5): vol.All(vol.Coerce(float), vol.Range(0, 10)),
         vol.Optional("language"): vol.In(LANGUAGES),
+        vol.Optional("night"): cv.boolean,
     }
 )
 SHOW_CLOCK_SCHEMA = vol.Schema(
@@ -254,10 +255,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         # captions follow Home Assistant's language unless one is given
         lang = call.data.get("language") or language_for(hass.config.language)
+        # night versions (moon instead of sun) after sunset, unless told otherwise
+        night = call.data.get("night")
+        if night is None:
+            sun = hass.states.get("sun.sun")
+            night = sun is not None and sun.state == "below_horizon"
 
         def frame_png(frame: int) -> bytes:
             return to_png(
-                render_icon(name, caption, call.data.get(ATTR_CAPTION_COLOR), frame, lang=lang),
+                render_icon(name, caption, call.data.get(ATTR_CAPTION_COLOR), frame, lang=lang, night=night),
                 brightness,
             )
 
