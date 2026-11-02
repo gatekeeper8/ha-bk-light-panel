@@ -20,7 +20,8 @@
 #   Empty = the plane is left out. Range: "LED panel - plane range".
 # NIGHT (22:00 until 6:00 on working days, 7:00 on days off - workday
 #   sensor, so public holidays count as days off): clock only, all red,
-#   low brightness, no pictures, no alerts (the clock still flips).
+#   dim (helper "LED panel - night brightness"), no pictures, no alerts
+#   (the clock still flips). Day: "LED panel - day brightness".
 # AURORA: NOAA Kp forecast (sensor "Aurora Kp max 24h", every 30 min).
 #   Daytime rotation: the aurora picture joins when Kp >= 5 is forecast
 #   in the next 24 h. Night: it breaks through, red and dim, every 5 min
@@ -59,6 +60,24 @@ input_number:
     initial: 80
     unit_of_measurement: km
     icon: mdi:radar
+  # the panel does not light very dark pixels: below ~25 % (night, red)
+  # the screen can look black - raise these if it does
+  led_panel_day_brightness:
+    name: LED panel - day brightness
+    min: 10
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:brightness-6
+  led_panel_night_brightness:
+    name: LED panel - night brightness
+    min: 5
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:brightness-4
 
 input_select:
   led_panel_rotation:
@@ -209,8 +228,8 @@ script:
           bar_max: 75
           brightness: >-
             {%- if haunted -%} 30
-            {%- elif night -%} 15
-            {%- else -%} 60
+            {%- elif night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_panel_day_brightness') | int(60) }}
             {%- endif -%}
 
   # --------------------------------------------------------- one picture
@@ -237,7 +256,8 @@ script:
             {% set t = states('sensor.outdoor_temperature') %}
             {% if not is_number(t) %}{% set t = state_attr('weather.forecast_home', 'temperature') %}{% endif %}
             {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
-          bright: "{{ 10 if now().hour >= 23 or now().hour < 7 else 60 }}"
+          bright: >-
+            {{ (states('input_number.led_panel_night_brightness') | int(40)) if is_state('binary_sensor.led_panel_night', 'on') else (states('input_number.led_panel_day_brightness') | int(60)) }}
       - action: counter.increment
         target:
           entity_id: counter.led_panel_slot
@@ -304,13 +324,14 @@ script:
     sequence:
       - variables:
           pm: "{{ states('sensor.outdoor_pm2_5') }}"
-          bright: "{{ 10 if now().hour >= 23 or now().hour < 7 else 60 }}"
+          bright: >-
+            {{ (states('input_number.led_panel_night_brightness') | int(40)) if is_state('binary_sensor.led_panel_night', 'on') else (states('input_number.led_panel_day_brightness') | int(60)) }}
       - action: bk_light_panel.show_icon
         continue_on_error: true
         data:
           icon: "{{ kind }}"
           caption: >-
-            {{ ('PM ' ~ (pm | float | round(0) | int)) if kind == 'smog' and is_number(pm) else 'CHARGE' if kind == 'heating' else '' }}
+            {{ ('PM ' ~ (pm | float | round(0) | int)) if kind == 'smog' and is_number(pm) else 'CHARGING' if kind == 'heating' else '' }}
           caption_color: "{{ [255, 60, 50] if kind == 'smog' else [255, 160, 60] }}"
           duration: 8
           frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
@@ -341,6 +362,28 @@ script:
       - action: script.led_panel_status
 
 automation:
+  # first install: put the brightness helpers at sensible starting values
+  - id: led_panel_first_run
+    alias: LED panel - first-run defaults
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - if: "{{ states('input_number.led_panel_day_brightness') | float(0) <= 10 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.led_panel_day_brightness
+            data:
+              value: 60
+      - if: "{{ states('input_number.led_panel_night_brightness') | float(0) <= 5 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.led_panel_night_brightness
+            data:
+              value: 40
+
   # One scheduler for everything, so the clock and pictures never send to
   # the panel at the same time: the clock at the full minute, pictures
   # only between :10 and :45 (they last 8 s), never across the minute.
@@ -360,6 +403,8 @@ automation:
           - input_boolean.led_panel_display
           - input_boolean.haunted_house
           - binary_sensor.led_panel_night
+          - input_number.led_panel_day_brightness
+          - input_number.led_panel_night_brightness
         id: now
     conditions:
       # don't interrupt a BOO!, a picture or an alert started elsewhere
@@ -414,7 +459,7 @@ automation:
                   duration: 8
                   frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
                   tint: [255, 25, 0]
-                  brightness: 15
+                  brightness: "{{ states('input_number.led_panel_night_brightness') | int(40) }}"
               - action: script.led_panel_status
                 continue_on_error: true
 
