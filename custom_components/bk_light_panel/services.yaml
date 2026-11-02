@@ -143,6 +143,9 @@ show_icon:
           step: 0.5
           unit_of_measurement: s
           mode: box
+    night:
+      selector:
+        boolean:
     language:
       selector:
         select:

@@ -349,3 +349,16 @@ def test_captions_in_both_languages_fit_the_panel():
     en = icons.render_icon("heating", None, frame=0, lang="en")
     pl = icons.render_icon("heating", None, frame=0, lang="pl")
     assert en.tobytes() != pl.tobytes()
+
+
+def test_night_versions_replace_the_sun():
+    from datetime import datetime
+    for name in ("sunny", "partlycloudy", "summer"):
+        day = icons.render_icon(name, "", frame=1, now=datetime(2026, 7, 1))
+        night = icons.render_icon(name, "", frame=1, now=datetime(2026, 7, 1), night=True)
+        assert day.tobytes() != night.tobytes(), name
+        # the sun's strong orange (high red, mid green, low blue) is gone at night
+        orange = [p for p in night.getdata() if p[0] > 200 and 80 < p[1] < 190 and p[2] < 60]
+        assert len(orange) < 5, name
+    # pictures without a sun do not change
+    assert icons.render_icon("rainy", "", frame=1).tobytes() == icons.render_icon("rainy", "", frame=1, night=True).tobytes()

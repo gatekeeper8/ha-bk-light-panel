@@ -340,6 +340,31 @@ def _summer(c: Canvas, frame: int) -> None:
     c.paint((150, 70, 40), hull)
 
 
+def _summer_night(c: Canvas, frame: int) -> None:
+    """Moonlit sea: crescent moon, stars, silver reflection, calm waves."""
+    _stars(c, frame, ((4, 4, 0.9), (27, 3, 0.8), (9, 15, 0.6), (24, 13, 0.7), (30, 19, 0.5)))
+    _crescent(c, 16, 10, 5.5)
+    sea = c.mask()
+    c.rrect_mask((-1, 23, 33, 33), 0, sea)
+    c.paint(c.vgrad((10, 50, 120), (0, 15, 55), 23, 32), sea)
+    for i in range(5):  # moon reflection
+        y = 24 + i * 1.6
+        w = 2.4 - i * 0.35
+        m = c.line_mask([(16 - w, y), (16 + w, y)], 0.45)
+        c.paint((225, 225, 205), m, 0.7 - i * 0.12)
+    for i in range(7):
+        x = (i * 5.3 + frame * 0.6) % 36 - 2
+        y = 25 + (i % 3) * 2.2
+        m = c.line_mask([(x, y), (x + 1.8, y)], 0.4)
+        c.paint((120, 150, 200), m, 0.6)
+    bx = 24 + math.sin(frame / 3) * 0.4  # the sailboat, as a dark silhouette
+    sail = c.poly_mask([(bx, 17.5), (bx, 23), (bx + 3.2, 23)])
+    c.poly_mask([(bx - 0.4, 18.5), (bx - 0.4, 23), (bx - 2.6, 23)], sail)
+    c.paint((150, 160, 185), sail)
+    hull = c.poly_mask([(bx - 3, 23.3), (bx + 3.6, 23.3), (bx + 2.6, 24.6), (bx - 2.2, 24.6)])
+    c.paint((70, 45, 35), hull)
+
+
 # ------------------------------------------------------------- alerts
 _SKYLINE = ((0, 5.5, 15.5), (6, 11.5, 11.5), (12, 15.5, 17.5), (16, 22.5, 13.5), (23, 26.5, 9.5), (27, 32, 15))
 
@@ -385,18 +410,31 @@ def _heating(c: Canvas, frame: int) -> None:
 
 
 # ------------------------------------------------------------- main
+def _crescent(c: Canvas, cx: float, cy: float, r: float) -> None:
+    """A glowing crescent moon (the night counterpart of the sun)."""
+    crescent = c.circle_mask(cx, cy, r)
+    cut = c.circle_mask(cx + r * 0.56, cy - r * 0.44, r * 0.95)
+    crescent.paste(0, mask=cut)
+    c.glow(crescent, (255, 230, 160), radius=r * 0.25, strength=0.35)
+    c.paint(c.rgrad(cx - r * 0.5, cy + r * 0.25, r * 1.1, MOON_LIGHT, MOON_SHADE), crescent)
+
+
+# weather states whose day picture shows the sun, and their night versions
+NIGHT_VERSIONS = {"sunny": "clear-night", "partlycloudy": "partlycloudy-night"}
+
+
 def _weather(c: Canvas, name: str, frame: int) -> None:
     if name == "sunny":
         _sun(c, 16, 12.5, 5.5, frame)
     elif name == "clear-night":
-        crescent = c.circle_mask(14, 12, 8)
-        cut = c.circle_mask(18.5, 8.5, 7.6)
-        crescent.paste(0, mask=cut)
-        c.glow(crescent, (255, 230, 160), radius=2.0, strength=0.35)
-        c.paint(c.rgrad(10, 14, 9, MOON_LIGHT, MOON_SHADE), crescent)
+        _crescent(c, 14, 12, 8)
         _stars(c, frame, ((25.5, 6, 1.1), (28, 17, 0.8), (4, 3.5, 0.8), (22, 22, 0.9), (27, 1.5, 0.6)))
     elif name == "partlycloudy":
         _sun(c, 11, 9, 4.6, frame)
+        _cloud(c, 2.5, 4.5, 0.85)
+    elif name == "partlycloudy-night":
+        _stars(c, frame, ((27, 3, 0.9), (4, 14, 0.7), (21, 2, 0.6), (29, 11, 0.6)))
+        _crescent(c, 11, 9, 5.2)
         _cloud(c, 2.5, 4.5, 0.85)
     elif name == "cloudy":
         drift = math.sin(frame / 3) * 0.8
@@ -452,8 +490,12 @@ def render_icon(
     frame: int = 0,
     now: datetime | None = None,
     lang: str = "en",
+    night: bool = False,
 ) -> Image.Image:
     """Draw one picture. 'season' and 'moon' work out today's season / phase.
+
+    night=True swaps pictures that show the sun for night versions
+    (moon and stars): sunny, partly cloudy and the summer sea.
 
     caption None = automatic (moon phase name, "CHARGING" for heating) in
     the given language (en / pl); "" = no caption.
@@ -463,10 +505,13 @@ def render_icon(
         name = season_for(now)
     if name not in ICONS:
         name = "exceptional"
+    if night:
+        name = NIGHT_VERSIONS.get(name, name)
 
     c = Canvas()
     if name in SEASONS:
-        {"autumn": _autumn, "winter": _winter, "spring": _spring, "summer": _summer}[name](c, frame)
+        summer = _summer_night if night else _summer
+        {"autumn": _autumn, "winter": _winter, "spring": _spring, "summer": summer}[name](c, frame)
         image = c.finish()
         if caption:
             for y in range(PANEL_HEIGHT - GLYPH_HEIGHT - 2, PANEL_HEIGHT):

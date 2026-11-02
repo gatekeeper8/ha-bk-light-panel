@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+- Night versions of the pictures that show the sun: sunny → moon and stars,
+  partly cloudy → crescent moon behind the cloud, summer → moonlit sea.
+  Automatic after sunset (`sun.sun`), or `night: true/false` in `show_icon`.
+
 ## 0.6.2
 - LICENSE is now the plain MIT text, so GitHub and HACS recognise it
   (the Bk-Light-AppBypass credit stays in NOTICE.md and the README).
