@@ -254,7 +254,7 @@
     },
     "show_aurora": {
       "name": "Show aurora forecast",
-      "description": "NOAA geomagnetic (Kp) forecast for the next 24 hours: moving aurora, bars per 3 hours, peak and its time. Returns the forecast; draws only when the peak reaches the minimum Kp.",
+      "description": "NOAA geomagnetic (Kp) forecast for the next 24 hours, plus the OVATION aurora probability at your location now (nowcast_local) and just north of it (nowcast_horizon). Draws only when the Kp peak reaches the minimum.",
       "fields": {
         "url": {
           "name": "Forecast URL",
@@ -287,6 +287,18 @@
         "show": {
           "name": "Show on panel",
           "description": "Off = only return the forecast (for sensors and automations), draw nothing."
+        },
+        "nowcast_url": {
+          "name": "Nowcast URL",
+          "description": "NOAA OVATION aurora nowcast JSON (default is fine)."
+        },
+        "latitude": {
+          "name": "Latitude",
+          "description": "Your position for the nowcast. Default: the home location."
+        },
+        "longitude": {
+          "name": "Longitude",
+          "description": "Your position for the nowcast. Default: the home location."
         }
       }
     }

@@ -48,7 +48,7 @@ from .const import (
     SERVICE_SHOW_TEXT,
 )
 from .aircraft import pick_nearest, render_aircraft
-from .aurora import DEFAULT_URL as AURORA_URL, next_hours, render_aurora, summary
+from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_at, render_aurora, summary
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .panel import BkLightPanel
 from .render import (
@@ -138,6 +138,9 @@ SHOW_AURORA_SCHEMA = vol.Schema(
     {
         **BASE,
         vol.Optional("url", default=AURORA_URL): cv.string,
+        vol.Optional("nowcast_url", default=OVATION_URL): cv.string,
+        vol.Optional("latitude"): cv.latitude,
+        vol.Optional("longitude"): cv.longitude,
         vol.Optional("min_kp", default=0): vol.All(vol.Coerce(float), vol.Range(0, 9)),
         vol.Optional("show", default=True): cv.boolean,
         vol.Optional(ATTR_DURATION, default=8): vol.All(vol.Coerce(float), vol.Range(0, 60)),
@@ -146,6 +149,7 @@ SHOW_AURORA_SCHEMA = vol.Schema(
     }
 )
 AURORA_CACHE_SECONDS = 15 * 60
+NOWCAST_CACHE_SECONDS = 10 * 60
 
 # animations are drawn for this pace; with a slower frame_interval the
 # frames skip ahead so the motion keeps its speed (just fewer steps)
@@ -328,27 +332,36 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     aurora_cache: dict[str, tuple[float, object]] = {}
 
-    async def show_aurora(call: ServiceCall) -> ServiceResponse:
-        """Kp forecast for the next 24 h; drawn only if the peak reaches min_kp."""
-        url = call.data["url"]
+    async def fetch_json(url: str, max_age: float) -> tuple[object | None, str | None]:
+        """JSON from url, cached for max_age s; the last good copy on errors."""
         cached = aurora_cache.get(url)
-        if cached and time.monotonic() - cached[0] < AURORA_CACHE_SECONDS:
-            data = cached[1]
-        else:
-            try:
-                async with asyncio.timeout(10):
-                    response = await async_get_clientsession(hass).get(url)
-                    response.raise_for_status()
-                    data = await response.json(content_type=None)
-            except (TimeoutError, aiohttp.ClientError, ValueError) as err:
-                _LOGGER.debug("Aurora forecast from %s not available: %s", url, err)
-                if not cached:
-                    return {"shown": False, "error": str(err) or type(err).__name__}
-                data = cached[1]  # keep using the last good forecast
-            else:
-                aurora_cache[url] = (time.monotonic(), data)
+        if cached and time.monotonic() - cached[0] < max_age:
+            return cached[1], None
+        try:
+            async with asyncio.timeout(15):
+                response = await async_get_clientsession(hass).get(url)
+                response.raise_for_status()
+                data = await response.json(content_type=None)
+        except (TimeoutError, aiohttp.ClientError, ValueError) as err:
+            _LOGGER.debug("Aurora data from %s not available: %s", url, err)
+            return (cached[1] if cached else None), str(err) or type(err).__name__
+        aurora_cache[url] = (time.monotonic(), data)
+        return data, None
+
+    async def show_aurora(call: ServiceCall) -> ServiceResponse:
+        """Kp forecast for 24 h plus the local nowcast; drawn only from min_kp."""
+        data, error = await fetch_json(call.data["url"], AURORA_CACHE_SECONDS)
+        if data is None:
+            return {"shown": False, "error": error}
         slots = next_hours(data)
         info = summary(slots)
+        # chance of aurora at / north of home right now (NOAA OVATION)
+        nowcast, _ = await fetch_json(call.data["nowcast_url"], NOWCAST_CACHE_SECONDS)
+        info.update(ovation_at(
+            nowcast,
+            call.data.get("latitude", hass.config.latitude),
+            call.data.get("longitude", hass.config.longitude),
+        ))
         if not call.data["show"] or not slots or info["max_kp"] < call.data["min_kp"]:
             return {"shown": False, **info}
         panel = _panel_for(hass, call)

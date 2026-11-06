@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+- Location-aware aurora: `show_aurora` also returns NOAA's OVATION nowcast for your
+  location: chance overhead (`nowcast_local`) and the highest chance just north of you
+  (`nowcast_horizon`, what you could see low in the north).
+- Example package: the night break-through needs clear skies (Met.no clouds < 70 %) and
+  real darkness; the phone notification is skipped when tonight is forecast overcast and
+  includes the expected cloud cover.
+
 ## 0.7.0
 - Night versions of the pictures that show the sun: sunny → moon and stars,
   partly cloudy → crescent moon behind the cloud, summer → moonlit sea.

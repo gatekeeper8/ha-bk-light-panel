@@ -1,7 +1,7 @@
 # LED panel (BK-Light 32x32) - status display
 # Example package: copy to /config/packages/led_panel.yaml
 # (configuration.yaml: homeassistant: packages: !include_dir_named packages)
-# Needs the bk_light_panel integration 0.6.0 or newer.
+# Needs the bk_light_panel integration 0.8.0 or newer.
 #
 # CLOCK most of the time: flip-clock cards (or classic big digits, helper
 #   "LED panel - clock style"), outdoor temperature, PM2.5 with a coloured
@@ -27,7 +27,10 @@
 #   in the next 24 h. Night: it breaks through, red and dim, every 5 min
 #   when Kp >= 6 now or in the next 3 h (then it may be visible here).
 #   Phone notification (notify.notify) once per day, from noon, when
-#   Kp >= 6 is forecast for tonight (18:00-06:00).
+#   Kp >= 6 is forecast for tonight (18:00-06:00) and the sky is not
+#   forecast overcast then (Met.no clouds < 70 %).
+#   Location-aware: OVATION nowcast at / north of home (NOAA), clouds and
+#   darkness (sun below -10 deg) decide the night break-through.
 # OFF ("LED panel - status display" off): the screen is kept black; the
 #   panel stays connected so its own stored animations never come back.
 # HAUNTED HOUSE: spooky clock, BOO! on corridor scares, no pictures.
@@ -118,20 +121,60 @@ counter:
     step: 1
 
 template:
-  # NOAA Kp forecast via the panel integration (cached, nothing is drawn)
+  # Aurora: NOAA Kp forecast + OVATION nowcast for the home location (via the
+  # panel integration, cached, nothing is drawn) + Met.no cloud cover tonight
   - triggers:
       - trigger: time_pattern
-        minutes: "/30"
+        minutes: "/10"
       - trigger: homeassistant
         event: start
     actions:
       - delay:
-          seconds: 30  # after a restart, give the integration time to load
+          seconds: 30  # after a restart, give the integrations time to load
       - action: bk_light_panel.show_aurora
         continue_on_error: true
         response_variable: aurora
         data:
           show: false
+      - action: weather.get_forecasts
+        continue_on_error: true
+        response_variable: fc
+        target:
+          entity_id: weather.forecast_home
+        data:
+          type: hourly
+      - variables:
+          # tonight = 18:00 until 06:00 (after midnight: now until 06:00);
+          # the strongest 3-hour Kp block in that window
+          tonight: >-
+            {% set ns = namespace(kp=none, start=none) %}
+            {% if aurora is defined and aurora.kp %}
+              {% set s0 = utcnow().replace(minute=0, second=0, microsecond=0) %}
+              {% set s0 = s0 - timedelta(hours=s0.hour % 3) %}
+              {% set dark_from = today_at('18:00') if now().hour >= 6 else today_at('00:00') - timedelta(hours=6) %}
+              {% set dark_to = today_at('06:00') + timedelta(days=1 if now().hour >= 6 else 0) %}
+              {% for k in aurora.kp %}
+                {% set start = (s0 + timedelta(hours=3 * loop.index0)) | as_local %}
+                {% if start + timedelta(hours=3) > dark_from and start < dark_to and (ns.kp is none or k > ns.kp) %}
+                  {% set ns.kp = k %}{% set ns.start = start.isoformat() %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ {'kp': ns.kp, 'start': ns.start} }}
+          # average cloud cover (%) forecast for those 3 hours
+          clouds_tonight: >-
+            {% set hours = (fc or {}).get('weather.forecast_home', {}).get('forecast', []) %}
+            {% if tonight.start %}
+              {% set a = as_datetime(tonight.start) %}
+              {% set ns = namespace(v=[]) %}
+              {% for h in hours if h.cloud_coverage is number
+                   and a <= as_datetime(h.datetime) < a + timedelta(hours=3) %}
+                {% set ns.v = ns.v + [h.cloud_coverage] %}
+              {% endfor %}
+              {{ (ns.v | sum / ns.v | count) | round(0) if ns.v else none }}
+            {% else %}
+              {{ none }}
+            {% endif %}
     sensor:
       - name: Aurora Kp max 24h
         unique_id: aurora_kp_max_24h
@@ -142,37 +185,13 @@ template:
           peak_time: "{{ aurora.peak_time if aurora is defined else none }}"
           kp_next_24h: "{{ aurora.kp if aurora is defined else [] }}"
           kp_now_3h: "{{ (aurora.kp[:2] | max) if aurora is defined and aurora.kp else none }}"
-          # tonight = 18:00 until 06:00 (after midnight: now until 06:00)
-          kp_tonight_max: >-
-            {% set ns = namespace(best=none, at=none) %}
-            {% if aurora is defined and aurora.kp %}
-              {% set s0 = utcnow().replace(minute=0, second=0, microsecond=0) %}
-              {% set s0 = s0 - timedelta(hours=s0.hour % 3) %}
-              {% set dark_from = today_at('18:00') if now().hour >= 6 else today_at('00:00') - timedelta(hours=6) %}
-              {% set dark_to = today_at('06:00') + timedelta(days=1 if now().hour >= 6 else 0) %}
-              {% for k in aurora.kp %}
-                {% set start = (s0 + timedelta(hours=3 * loop.index0)) | as_local %}
-                {% if start + timedelta(hours=3) > dark_from and start < dark_to and (ns.best is none or k > ns.best) %}
-                  {% set ns.best = k %}{% set ns.at = start.strftime('%H:%M') %}
-                {% endif %}
-              {% endfor %}
-            {% endif %}
-            {{ ns.best }}
-          kp_tonight_time: >-
-            {% set ns = namespace(best=none, at=none) %}
-            {% if aurora is defined and aurora.kp %}
-              {% set s0 = utcnow().replace(minute=0, second=0, microsecond=0) %}
-              {% set s0 = s0 - timedelta(hours=s0.hour % 3) %}
-              {% set dark_from = today_at('18:00') if now().hour >= 6 else today_at('00:00') - timedelta(hours=6) %}
-              {% set dark_to = today_at('06:00') + timedelta(days=1 if now().hour >= 6 else 0) %}
-              {% for k in aurora.kp %}
-                {% set start = (s0 + timedelta(hours=3 * loop.index0)) | as_local %}
-                {% if start + timedelta(hours=3) > dark_from and start < dark_to and (ns.best is none or k > ns.best) %}
-                  {% set ns.best = k %}{% set ns.at = start.strftime('%H:%M') %}
-                {% endif %}
-              {% endfor %}
-            {% endif %}
-            {{ ns.at }}
+          kp_tonight_max: "{{ tonight.kp }}"
+          kp_tonight_time: "{{ as_datetime(tonight.start).strftime('%H:%M') if tonight.start else none }}"
+          clouds_tonight: "{{ clouds_tonight }}"
+          # OVATION: chance of aurora overhead at home / low in the north, now
+          nowcast_local: "{{ aurora.nowcast_local if aurora is defined else none }}"
+          nowcast_horizon: "{{ aurora.nowcast_horizon if aurora is defined else none }}"
+          nowcast_time: "{{ aurora.nowcast_time if aurora is defined else none }}"
   - binary_sensor:
       - name: LED panel night
         unique_id: led_panel_night
@@ -429,12 +448,17 @@ automation:
                and ((now().timestamp() | int // 5 * 5) - 15) % every == 0
                and is_state('input_boolean.haunted_house', 'off')
                and is_state('binary_sensor.led_panel_night', 'off') }}
-          # night: aurora only when it may really be visible (Kp >= 6 now / next 3 h)
+          # night: aurora only when it may really be visible here - Kp >= 6
+          # now / next 3 h, or OVATION >= 30 % just north of home - and the
+          # sky is not overcast (< 70 % clouds) and it is properly dark
           night_aurora_due: >-
             {{ is_state('binary_sensor.led_panel_night', 'on')
                and is_state('input_boolean.haunted_house', 'off')
                and now().minute % 5 == 0 and 15 <= second < 20
-               and state_attr('sensor.aurora_kp_max_24h', 'kp_now_3h') | float(0) >= 6 }}
+               and (state_attr('sensor.aurora_kp_max_24h', 'kp_now_3h') | float(0) >= 6
+                    or state_attr('sensor.aurora_kp_max_24h', 'nowcast_horizon') | float(0) >= 30)
+               and state_attr('weather.forecast_home', 'cloud_coverage') | float(0) < 70
+               and state_attr('sun.sun', 'elevation') | float(0) < -10 }}
       - choose:
           # display off: hold a black screen (resent only after a reconnect)
           - conditions: "{{ is_state('input_boolean.led_panel_display', 'off') }}"
@@ -521,6 +545,11 @@ automation:
         before: "23:00:00"
       - condition: template
         value_template: "{{ state_attr('sensor.aurora_kp_max_24h', 'kp_tonight_max') | float(0) >= 6 }}"
+      # no point if tonight's sky is forecast overcast (unknown clouds: notify anyway)
+      - condition: template
+        value_template: >-
+          {% set c = state_attr('sensor.aurora_kp_max_24h', 'clouds_tonight') %}
+          {{ c is none or c | float(0) < 70 }}
       - condition: template
         value_template: >-
           {% set last = state_attr(this.entity_id, 'last_triggered') %}
@@ -530,8 +559,10 @@ automation:
         data:
           title: "Aurora possible tonight"
           message: >-
-            NOAA forecast: Kp {{ state_attr('sensor.aurora_kp_max_24h', 'kp_tonight_max') | round(1) }}
-            around {{ state_attr('sensor.aurora_kp_max_24h', 'kp_tonight_time') }}.
+            {% set a = 'sensor.aurora_kp_max_24h' %}
+            {% set c = state_attr(a, 'clouds_tonight') %}
+            NOAA forecast: Kp {{ state_attr(a, 'kp_tonight_max') | round(1) }}
+            around {{ state_attr(a, 'kp_tonight_time') }}{{ (', clouds about ' ~ (c | int) ~ ' %') if c is not none else '' }}.
             Look low to the north, away from city lights.
 
   - id: led_panel_off

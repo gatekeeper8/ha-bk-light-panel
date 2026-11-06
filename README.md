@@ -23,7 +23,9 @@ an aurora forecast, alerts and your own images.
   altitude, distance and the **flag of its country of registration** (from the ICAO
   address).
 - **Aurora forecast**: NOAA SWPC planetary Kp forecast for the next 24 hours as
-  bars, with the expected peak.
+  bars, with the expected peak, plus NOAA's OVATION nowcast for your own location
+  (chance overhead and low in the north). The example combines it with cloud cover
+  and darkness before alerting you.
 - **Text, colours and your own images** (PNG/JPG/GIF, scaled to 32×32).
 - **Smooth operation**: stays connected (so the panel never falls back to its stored
   animations), restores the picture after a dropped connection and never re-sends an

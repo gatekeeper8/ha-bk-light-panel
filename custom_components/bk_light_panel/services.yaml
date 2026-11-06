@@ -289,6 +289,24 @@ show_aurora:
       example: "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
       selector:
         text:
+    nowcast_url:
+      example: "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
+      selector:
+        text:
+    latitude:
+      selector:
+        number:
+          min: -90
+          max: 90
+          step: any
+          mode: box
+    longitude:
+      selector:
+        number:
+          min: -180
+          max: 180
+          step: any
+          mode: box
     min_kp:
       default: 0
       selector:

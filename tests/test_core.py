@@ -362,3 +362,19 @@ def test_night_versions_replace_the_sun():
         assert len(orange) < 5, name
     # pictures without a sun do not change
     assert icons.render_icon("rainy", "", frame=1).tobytes() == icons.render_icon("rainy", "", frame=1, night=True).tobytes()
+
+
+def test_ovation_nowcast_at_home_and_north():
+    grid = [[lon, lat, 0] for lon in range(360) for lat in range(-90, 91)]
+    values = {(19, 50): 3, (19, 54): 18, (22, 56): 25, (19, 60): 90, (30, 55): 70}
+    data = {"Forecast Time": "2026-11-06T06:40:00Z",
+            "coordinates": [[lo, la, values.get((lo, la), v)] for lo, la, v in grid]}
+    now = aurora.ovation_at(data, 50.2547, 19.0146)
+    assert now["nowcast_local"] == 3
+    # within 6 deg north and 4 deg east/west: (22,56)=25 counts, (19,60) and (30,55) are too far
+    assert now["nowcast_horizon"] == 25
+    assert now["nowcast_time"] == "2026-11-06T06:40:00Z"
+    # western longitudes are stored 0..359
+    west = aurora.ovation_at({"coordinates": [[358, 52, 40]]}, 52.0, -2.0)
+    assert west["nowcast_local"] == 40
+    assert aurora.ovation_at({}, 50, 19)["nowcast_local"] is None
