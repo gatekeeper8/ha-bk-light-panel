@@ -19,6 +19,13 @@ from .gfx import Canvas, curve
 from .render import _small_line
 
 DEFAULT_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
+# OVATION nowcast: aurora probability (%) on a 1-degree grid for the next ~30-90 min,
+# "coordinates": [[longitude 0..359, latitude -90..90, probability], ...]
+OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
+# aurora low on the northern horizon is up to a few hundred km north of you:
+# also look this many degrees north (and east/west) of home
+HORIZON_LAT_DEGREES = 6
+HORIZON_LON_DEGREES = 4
 SLOT = timedelta(hours=3)
 
 
@@ -66,6 +73,37 @@ def summary(slots: list[dict[str, Any]]) -> dict[str, Any]:
         "peak_time": peak["time"].isoformat(),
         "kp": [round(r["kp"], 2) for r in slots],
     }
+
+
+def ovation_at(data: Any, lat: float, lon: float) -> dict[str, Any]:
+    """OVATION probability at home and the highest one just north of it.
+
+    local   = chance of aurora overhead at home (%)
+    horizon = highest chance within ~6 degrees north (what you could see low
+              on the northern horizon)
+    """
+    result: dict[str, Any] = {"nowcast_local": None, "nowcast_horizon": None, "nowcast_time": None}
+    if not isinstance(data, dict) or not isinstance(data.get("coordinates"), list):
+        return result
+    grid: dict[tuple[int, int], float] = {}
+    for item in data["coordinates"]:
+        try:
+            grid[(int(item[0]) % 360, int(item[1]))] = float(item[2])
+        except (TypeError, ValueError, IndexError):
+            continue
+    hlat, hlon = round(lat), round(lon) % 360
+    step = 1 if lat >= 0 else -1  # "north" = towards the nearer pole
+    local = grid.get((hlon, hlat))
+    nearby = [
+        grid[key]
+        for dlat in range(0, HORIZON_LAT_DEGREES + 1)
+        for dlon in range(-HORIZON_LON_DEGREES, HORIZON_LON_DEGREES + 1)
+        if (key := ((hlon + dlon) % 360, hlat + step * dlat)) in grid
+    ]
+    result["nowcast_local"] = local
+    result["nowcast_horizon"] = max(nearby) if nearby else None
+    result["nowcast_time"] = data.get("Forecast Time")
+    return result
 
 
 def kp_color(kp: float) -> tuple[int, int, int]:
