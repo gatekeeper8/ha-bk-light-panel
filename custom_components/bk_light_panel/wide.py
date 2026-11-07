@@ -13,6 +13,7 @@ from typing import Any
 
 from PIL import Image
 
+from . import font7
 from .aircraft import PLANE, _altitude_text
 from .aurora import kp_color
 from .flags import draw_flag
@@ -27,7 +28,6 @@ from .render import (
     render_clock,
     render_flip_clock,
     text_width,
-    wrap_lines,
 )
 
 WIDTH, HEIGHT = 64, 16
@@ -71,14 +71,22 @@ def _text(pixels, text: str, x0: int, x1: int, y: int, color: RGB) -> None:
         x += len(rows[0]) + CHAR_GAP
 
 
+def _big(pixels, text: str, x0: int, x1: int, y: int, color: RGB) -> None:
+    """Rounded 7-pixel text centred between x0 and x1; the small font if it does not fit."""
+    if font7.fits(text) and font7.width(text) <= x1 - x0:
+        font7.draw(pixels, text, x0 + (x1 - x0 - font7.width(text)) // 2, y, color, (x0, x1))
+    else:
+        _text(pixels, text, x0, x1, y + 1, color)
+
+
 def _two_lines(pixels, lines: list[tuple[str, RGB]], x0: int, x1: int) -> None:
-    """One line centred vertically, or two lines at y 2 and 9."""
+    """One line centred vertically, or two lines at y 0 and 9 (big rounded font)."""
     lines = [(t, c) for t, c in lines if t][:2]
     if len(lines) == 1:
-        _text(pixels, lines[0][0], x0, x1, 5, lines[0][1])
+        _big(pixels, lines[0][0], x0, x1, 4, lines[0][1])
     else:
-        for (text, color), y in zip(lines, (2, 9)):
-            _text(pixels, text, x0, x1, y, color)
+        for (text, color), y in zip(lines, (0, 9)):
+            _big(pixels, text, x0, x1, y, color)
 
 
 def _bar(pixels, value: float | None, maximum: float, x0: int, x1: int, y: int) -> None:
@@ -165,7 +173,7 @@ def render_icon_wide(
         image.paste(_picture(name, frame, night, now), (0, 0))
         pixels = image.load()
         color = _color(caption_color, (255, 255, 255))
-        lines = wrap_lines(caption, 46)[:2]
+        lines = font7.wrap(caption, 46)[:2]
         _two_lines(pixels, [(line, color) for line in lines], 17, 64)
     else:
         image.paste(_picture(name, frame, night, now), (24, 0))
@@ -191,21 +199,19 @@ def render_aircraft_wide(info: dict[str, Any], frame: int = 0) -> Image.Image:
     image.paste(plane.finish().crop((0, 0, 16, 16)), (0, 0))
     country = info.get("country")
     flag = Canvas()
-    has_flag = draw_flag(flag, country, 1.0, 1.0, 11.0, 7.5) if country else False
+    has_flag = draw_flag(flag, country, 1.0, 1.0, 11.0, 7.0) if country else False
+    line2_end = 64
+    if has_flag:  # flag bottom right, beside the second line
+        image.paste(flag.finish().crop((1, 1, 12, 8)), (53, 9))
+        line2_end = 52
     pixels = image.load()
-    text_x0 = 17
-    if has_flag:
-        image.paste(flag.finish().crop((0, 0, 13, 9)), (17, 0))
-        pixels = image.load()
-        _text(pixels, country, 17, 30, 10, (170, 170, 180))
-        text_x0 = 31
 
     show_second = (frame // 4) % 2 == 1
     top = info.get("type") if show_second and info.get("type") else info.get("callsign", "")
     bottom = (f"↔{round(info.get('distance_km') or 0)}KM" if show_second
               else _altitude_text(info.get("altitude_m")))
-    _text(pixels, str(top)[:8], text_x0, 64, 2, (255, 190, 90))
-    _text(pixels, bottom, text_x0, 64, 9, (180, 255, 180) if show_second else (150, 210, 255))
+    _big(pixels, str(top)[:8], 17, 64, 0, (255, 190, 90))
+    _big(pixels, bottom, 17, line2_end, 9, (180, 255, 180) if show_second else (150, 210, 255))
     return image
 
 
@@ -249,9 +255,9 @@ def render_aurora_wide(slots: list[dict[str, Any]], frame: int = 0, local_tz=Non
     if slots:
         best = max(slots, key=lambda r: r["kp"])
         color = kp_color(best["kp"])
-        _text(pixels, f"KP {round(best['kp'])}", 33, 64, 2, color)
+        _big(pixels, f"KP {round(best['kp'])}", 33, 64, 0, color)
         when = best["time"].astimezone(local_tz) if local_tz else best["time"]
-        _text(pixels, f"{when.hour:02d}H", 33, 64, 9, (200, 200, 210))
+        _big(pixels, f"{when.hour:02d}H", 33, 64, 9, (200, 200, 210))
     else:
-        _text(pixels, "KP --", 33, 64, 5, (140, 140, 140))
+        _big(pixels, "KP --", 33, 64, 4, (140, 140, 140))
     return image

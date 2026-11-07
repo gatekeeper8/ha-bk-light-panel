@@ -84,7 +84,8 @@ the aurora shows the Kp bars with the peak hour. With several panels, name the o
 mean with `panel:`.
 
 [`examples/led_panel_wide.yaml`](examples/led_panel_wide.yaml) turns a 64×16 panel into a
-second clock with the date, alternating every minute with the outdoor readings.
+second clock with the date, alternating every minute with the outdoor readings and a
+rotating picture (weather, nearest plane, aurora, smog, moon, heating, season).
 
 ![64x16 layouts](images/wide_panel.png)
 

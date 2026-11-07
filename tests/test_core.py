@@ -477,3 +477,13 @@ def test_slide_frames_push_left():
     assert len(frames) == 3
     assert frames[0].getpixel((0, 0)) == (255, 0, 0) and frames[0].getpixel((63, 0)) == (0, 0, 255)
     assert frames[1].getpixel((31, 0)) == (255, 0, 0) and frames[1].getpixel((32, 0)) == (0, 0, 255)
+
+
+def test_font7_glyphs_are_consistent():
+    font7 = _load("font7")
+    for char, rows in font7.GLYPHS.items():
+        assert len(rows) == 7, char
+        assert len({len(r) for r in rows}) == 1, char
+    assert font7.fits("SAT 7") and font7.width("SAT 7") <= 30
+    for word in ("CHARGING", "CRESCENT", "AUTUMN", "LOT3925", "↑10.5KM"):
+        assert font7.width(word) <= 46, word

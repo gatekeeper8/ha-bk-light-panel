@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from PIL import Image
 
+from . import font7
 from .render import CHAR_GAP, _glyph, text_width
 
 RGB = tuple[int, int, int]
@@ -62,6 +63,9 @@ def _draw(pixels, size, x: int, y: int, kind: str, value: float | None, width: i
             if pixel == "#":
                 pixels[x + 1 + rx, y + ry] = color
     text = text_for(kind, value) if known else "--"
+    if size == (64, 16) and font7.width(text) <= width - 7:  # big rounded digits
+        font7.draw(pixels, text, x + 7 + (width - 7 - font7.width(text)) // 2, y - 1, color, (x, x + width))
+        return
     tx = x + 7 + max(0, (width - 7 - text_width(text)) // 2)
     for char in text:
         rows = _glyph(char)
@@ -78,7 +82,7 @@ def render_readings(values: dict[str, float | None], size: tuple[int, int] = (32
     pixels = image.load()
     kinds = [k for k in ORDER if k in values][:4]
     if size == (64, 16):
-        cells = [(0, 2), (32, 2), (0, 9), (32, 9)]
+        cells = [(0, 1), (32, 1), (0, 10), (32, 10)]  # icons y 1-5 / 10-14, digits a row higher
         width = 32
         if len(kinds) <= 2:
             cells = [(0, 5), (32, 5)]
