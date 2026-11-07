@@ -77,7 +77,8 @@ def test_chunking():
 class FakePanel:
     """Behaves like the panel: answers handshake and complete frames."""
 
-    def __init__(self, answer_stage_two: bool = True) -> None:
+    def __init__(self, answer_stage_two: bool = True, wide: bool = False) -> None:
+        self.wide = wide
         self.callback = None
         self.writes: list[tuple[bytes, bool]] = []
         self.buffer = b""
@@ -95,7 +96,10 @@ class FakePanel:
         data = bytes(data)
         self.writes.append((data, response))
         if data == protocol.HANDSHAKE_FIRST:
-            self._notify("0C 00 01 80 81 06 32 00 00 01 00 01")
+            if self.wide:  # 64x16 (ACT1025 / ACT1033)
+                self._notify("0B 00 01 80 83 06 32 00 00 01 00")
+            else:
+                self._notify("0C 00 01 80 81 06 32 00 00 01 00 01")
         elif data == protocol.HANDSHAKE_SECOND:
             if self.answer_stage_two:
                 self._notify("08 00 05 80 0B 03 07 02")
@@ -397,3 +401,56 @@ def test_no_validation_command_by_default():
 
     fake = asyncio.run(run())
     assert not [w for w, _ in fake.writes if w == protocol.FRAME_VALIDATION]
+
+
+def test_size_from_handshake():
+    async def run(wide):
+        session = protocol.PanelSession(FakePanel(wide=wide))
+        await session.start()
+        assert session.size is None
+        await session.ensure_primed()
+        return session.size
+
+    assert asyncio.run(run(False)) == (32, 32)
+    assert asyncio.run(run(True)) == (64, 16)
+
+
+# ------------------------------------------------------------ wide panel
+def _load_all():
+    for name in ("gfx", "flags", "icons", "aircraft", "aurora", "wide"):
+        if f"bkpkg.{name}" not in sys.modules:
+            _load(name)
+    return sys.modules["bkpkg.wide"], sys.modules["bkpkg.icons"]
+
+
+def test_wide_layouts_are_64x16():
+    from datetime import UTC, datetime, timedelta
+
+    wide, icons = _load_all()
+    images = [
+        wide.render_clock_wide("21:47", line1="9°C", line2="PM 12", bar_value=12),
+        wide.render_clock_wide("21:48", "21:47", 0, line1="9°C"),
+        wide.render_clock_wide("07:05", style="classic", line1="12°C", line2="PM 8"),
+        wide.render_aircraft_wide({"callsign": "LOT3925", "type": "B738", "country": "PL",
+                                   "track": 250, "altitude_m": 10500, "distance_km": 23}),
+        wide.render_aircraft_wide({"callsign": "N123", "track": 90}, 5),  # no country
+        wide.render_aurora_wide([{"time": datetime(2026, 11, 7, tzinfo=UTC) + timedelta(hours=3 * i),
+                                  "kp": k} for i, k in enumerate([2, 4, 6.3, 5])], 1),
+        wide.render_aurora_wide([]),
+        render.render_text("HELLO WORLD", size=(64, 16)),
+        render.render_fill([1, 2, 3], (64, 16)),
+    ]
+    for name in icons.ICONS:
+        images.append(wide.render_icon_wide(name, frame=2))
+        images.append(wide.render_icon_wide(name, "", frame=1, night=True))
+    assert all(image.size == (64, 16) for image in images)
+    # the clock leaves the right half for the text lines
+    assert images[0].crop((32, 0, 64, 16)).getbbox() is not None
+
+
+def test_wide_captions_fit():
+    wide, icons = _load_all()
+    for lang in icons.LANGUAGES:
+        for name in ("moon", "heating", "spring", "summer", "autumn", "winter"):
+            caption = wide.auto_caption(name, lang)
+            assert caption and render.text_width(caption) <= 46, (lang, caption)

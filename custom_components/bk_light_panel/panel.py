@@ -47,6 +47,27 @@ class BkLightPanel:
         self._closing = False
         self._shutting_down = False
         self._recover_task: asyncio.Task | None = None
+        # (width, height), known after the first handshake
+        self.size: tuple[int, int] | None = None
+
+    async def async_get_size(self) -> tuple[int, int]:
+        """The panel's size in pixels; connects once to ask if not known yet."""
+        if self.size:
+            return self.size
+        async with self._lock:
+            if not self.size:
+                try:
+                    await self._ensure_connected()
+                    assert self._session is not None
+                    await self._session.ensure_primed()
+                except (BleakError, TimeoutError, EOFError, OSError) as err:
+                    await self._disconnect()
+                    raise HomeAssistantError(
+                        f"Cannot reach {self.name}: {err or type(err).__name__}"
+                    ) from err
+                self.size = self._session.size or (32, 32)
+                _LOGGER.debug("%s is %dx%d pixels", self.name, *self.size)
+        return self.size
 
     async def async_send_png(self, png: bytes) -> None:
         """Send one image, reconnecting once if the link dropped."""

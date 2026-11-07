@@ -1,4 +1,4 @@
-"""BK-Light LED panel (Action ACT1026) for Home Assistant.
+"""BK-Light LED panels (Action ACT1026 32x32, ACT1025 / ACT1033 64x16) for Home Assistant.
 
 Actions: bk_light_panel.show_clock, .show_text, .show_icon,
 .show_nearest_aircraft, .fill, .show_image, .clear
@@ -51,6 +51,13 @@ from .aircraft import pick_nearest, render_aircraft
 from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_at, render_aurora, summary
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .panel import BkLightPanel
+from .wide import (
+    is_wide,
+    render_aircraft_wide,
+    render_aurora_wide,
+    render_clock_wide,
+    render_icon_wide,
+)
 from .render import (
     apply_tint,
     render_clock,
@@ -203,6 +210,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def show_text(call: ServiceCall) -> None:
         panel = _panel_for(hass, call)
+        size = await panel.async_get_size()
         png = await hass.async_add_executor_job(
             lambda: to_png(
                 render_text(
@@ -211,6 +219,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     call.data.get(ATTR_BACKGROUND),
                     call.data.get(ATTR_LINE_COLORS),
                     call.data[ATTR_SCALE],
+                    size,
                 ),
                 call.data[ATTR_BRIGHTNESS],
             )
@@ -219,8 +228,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def fill(call: ServiceCall) -> None:
         panel = _panel_for(hass, call)
+        size = await panel.async_get_size()
         png = await hass.async_add_executor_job(
-            lambda: to_png(render_fill(call.data[ATTR_COLOR]), call.data[ATTR_BRIGHTNESS])
+            lambda: to_png(render_fill(call.data[ATTR_COLOR], size), call.data[ATTR_BRIGHTNESS])
         )
         await panel.async_send_png(png)
 
@@ -232,10 +242,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 f"{path} is not in an allowed folder - put pictures in /config/www "
                 "or add the folder to allowlist_external_dirs"
             )
+        size = await panel.async_get_size()
         try:
             png = await hass.async_add_executor_job(
                 lambda: to_png(
-                    render_file(path, call.data[ATTR_FIT], call.data.get(ATTR_BACKGROUND)),
+                    render_file(path, call.data[ATTR_FIT], call.data.get(ATTR_BACKGROUND), size),
                     call.data[ATTR_BRIGHTNESS],
                 )
             )
@@ -245,7 +256,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def clear(call: ServiceCall) -> None:
         panel = _panel_for(hass, call)
-        png = await hass.async_add_executor_job(partial(to_png, render_fill([0, 0, 0])))
+        size = await panel.async_get_size()
+        png = await hass.async_add_executor_job(partial(to_png, render_fill([0, 0, 0], size)))
         await panel.async_send_png(png)
 
     async def show_icon(call: ServiceCall) -> None:
@@ -265,9 +277,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             sun = hass.states.get("sun.sun")
             night = sun is not None and sun.state == "below_horizon"
 
+        draw = render_icon_wide if is_wide(await panel.async_get_size()) else render_icon
+
         def frame_png(frame: int) -> bytes:
             return to_png(
-                render_icon(name, caption, call.data.get(ATTR_CAPTION_COLOR), frame, lang=lang, night=night),
+                draw(name, caption, call.data.get(ATTR_CAPTION_COLOR), frame, lang=lang, night=night),
                 brightness,
             )
 
@@ -281,6 +295,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         time_text = data.get("time") or dt_util.now().strftime("%H:%M")
         extras = (data["line1"], data.get("line1_color"), data["line2"],
                   data.get("line2_color"), data.get("bar_value"), data["bar_max"])
+        if is_wide(await panel.async_get_size()):
+            previous = getattr(panel, "last_clock_time", None)
+            flip = data["style"] == "flip"
+            steps = (0, 1, 2) if flip and data["animate"] and previous and previous != time_text else (2,)
+            for step in steps:
+                png = await hass.async_add_executor_job(
+                    lambda st=step: to_png(
+                        apply_tint(
+                            render_clock_wide(time_text, previous, st, data["style"],
+                                              data.get("time_color"), *extras),
+                            data.get("tint"),
+                        ),
+                        data[ATTR_BRIGHTNESS],
+                    )
+                )
+                await panel.async_send_png(png)
+            panel.last_clock_time = time_text
+            return
         if data["style"] == "classic":
             png = await hass.async_add_executor_job(
                 lambda: to_png(
@@ -324,8 +356,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             return {"found": False}
         panel = _panel_for(hass, call)
         brightness = call.data[ATTR_BRIGHTNESS]
+        draw = render_aircraft_wide if is_wide(await panel.async_get_size()) else render_aircraft
         await _animate(
-            hass, panel, lambda f: to_png(render_aircraft(nearest, f), brightness),
+            hass, panel, lambda f: to_png(draw(nearest, f), brightness),
             call.data[ATTR_DURATION], call.data["frame_interval"],
         )
         return {"found": True, **nearest}
@@ -367,9 +400,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         panel = _panel_for(hass, call)
         brightness, tint = call.data[ATTR_BRIGHTNESS], call.data.get("tint")
         tz = dt_util.get_default_time_zone()
+        draw = render_aurora_wide if is_wide(await panel.async_get_size()) else render_aurora
         await _animate(
             hass, panel,
-            lambda f: to_png(apply_tint(render_aurora(slots, f, tz), tint), brightness),
+            lambda f: to_png(apply_tint(draw(slots, f, tz), tint), brightness),
             call.data[ATTR_DURATION], call.data["frame_interval"],
         )
         return {"shown": True, **info}

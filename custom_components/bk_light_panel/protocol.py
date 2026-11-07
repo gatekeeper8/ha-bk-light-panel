@@ -75,6 +75,8 @@ class PanelSession:
         self._client = client
         self._max_write = max_write
         self._primed = False
+        # (width, height) from the first handshake answer: 0C = 32x32, 0B = 64x16
+        self.size: tuple[int, int] | None = None
         self._frames_since_validation = 0
         self._stage_one = asyncio.Event()
         self._stage_two = asyncio.Event()
@@ -87,6 +89,7 @@ class PanelSession:
         payload = bytes(data)
         _LOGGER.debug("Panel notification: %s", payload.hex(" "))
         if is_ack_stage_one(payload):
+            self.size = (64, 16) if payload[0] == 0x0B else (32, 32)
             self._stage_one.set()
         elif is_ack_stage_two(payload):
             self._stage_two.set()
@@ -111,10 +114,14 @@ class PanelSession:
         await asyncio.sleep(STEP_DELAY)
         self._primed = True
 
-    async def send_png(self, png_bytes: bytes) -> None:
-        """Send one PNG image (must already be the panel's size)."""
+    async def ensure_primed(self) -> None:
+        """Handshake once per connection (also tells the panel's size)."""
         if not self._primed:
             await self._handshake()
+
+    async def send_png(self, png_bytes: bytes) -> None:
+        """Send one PNG image (must already be the panel's size)."""
+        await self.ensure_primed()
         frame = build_frame(png_bytes)
         self._frame_ack.clear()
         started = time.monotonic()

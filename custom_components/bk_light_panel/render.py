@@ -134,8 +134,10 @@ def render_text(
     background: list[int] | None = None,
     line_colors: list[list[int]] | None = None,
     scale: int = 1,
+    size: tuple[int, int] = (PANEL_WIDTH, PANEL_HEIGHT),
 ) -> Image.Image:
     """Centred multi-line text on a panel-sized image."""
+    PANEL_WIDTH, PANEL_HEIGHT = size  # noqa: N806 - local panel size
     scale = max(1, min(4, int(scale)))
     fg = _color(color, (255, 255, 255))
     bg = _color(background, (0, 0, 0))
@@ -171,15 +173,21 @@ def render_text(
     return image
 
 
-def render_fill(color: list[int] | None) -> Image.Image:
-    return Image.new("RGB", (PANEL_WIDTH, PANEL_HEIGHT), _color(color, (0, 0, 0)))
+def render_fill(
+    color: list[int] | None, size: tuple[int, int] = (PANEL_WIDTH, PANEL_HEIGHT)
+) -> Image.Image:
+    return Image.new("RGB", size, _color(color, (0, 0, 0)))
 
 
-def render_file(path: str, fit: str = "contain", background: list[int] | None = None) -> Image.Image:
+def render_file(
+    path: str,
+    fit: str = "contain",
+    background: list[int] | None = None,
+    size: tuple[int, int] = (PANEL_WIDTH, PANEL_HEIGHT),
+) -> Image.Image:
     """Load a picture and fit it to the panel (blocking: run in executor)."""
     with Image.open(path) as source:
         source = source.convert("RGBA")
-        size = (PANEL_WIDTH, PANEL_HEIGHT)
         canvas = Image.new("RGBA", size, (*_color(background, (0, 0, 0)), 255))
         if fit == "stretch":
             picture = source.resize(size, Image.Resampling.NEAREST)

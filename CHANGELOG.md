@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+- Wide 64×16 panels (Action ACT1025 / ACT1033): the size is read from the panel's
+  handshake and every action picks a matching layout: flip or classic clock with the
+  text lines beside it, pictures with the caption beside them, a flight-board line for
+  the nearest plane, Kp bars with the peak for the aurora. Text, fill and your own
+  images use the full 64×16. Existing 32×32 setups are unchanged.
+
 ## 0.8.1
 - Fix: the panel's stored phone-app animations flashed up briefly every 30th frame
   (every 10 minutes with the night clock). The integration no longer sends the
