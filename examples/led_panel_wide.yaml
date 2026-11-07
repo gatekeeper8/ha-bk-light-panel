@@ -2,8 +2,9 @@
 # Package: /config/packages/led_panel_wide.yaml
 # Needs the bk_light_panel integration 0.9.0 or newer.
 # Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
-#   night mode (binary_sensor.led_panel_night), day / night brightness,
-#   clock style (flip / classic).
+#   night mode (binary_sensor.led_panel_night), clock style (flip / classic).
+# BRIGHTNESS: its own sliders "LED panel 2 - day / night brightness"; on
+#   first start they copy the big panel's values.
 #
 # Every minute (day):
 #   :00 CLOCK - flip cards, weekday + day and month (big rounded letters);
@@ -30,6 +31,26 @@ input_boolean:
   led_wide_screen_off:
     name: LED panel 2 - screen off
     icon: mdi:monitor-off
+
+input_number:
+  # the panel does not light very dark pixels: if the red night screen
+  # looks black, raise the night value
+  led_wide_day_brightness:
+    name: LED panel 2 - day brightness
+    min: 10
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:brightness-6
+  led_wide_night_brightness:
+    name: LED panel 2 - night brightness
+    min: 5
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:brightness-4
 
 counter:
   led_wide_slot:
@@ -66,8 +87,8 @@ script:
           line2: "{{ now().strftime('%b') | upper }}"
           line2_color: [200, 200, 200]
           brightness: >-
-            {%- if night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}
-            {%- else -%} {{ states('input_number.led_panel_day_brightness') | int(60) }}
+            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
 
   led_wide_readings:
@@ -87,8 +108,8 @@ script:
           transition: slide
           tint: "{{ [255, 25, 0] if night else none }}"
           brightness: >-
-            {%- if night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}
-            {%- else -%} {{ states('input_number.led_panel_day_brightness') | int(60) }}
+            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
 
   led_wide_picture:
@@ -115,7 +136,7 @@ script:
             {% if not is_number(t) %}{% set t = state_attr('weather.forecast_dom', 'temperature') %}{% endif %}
             {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
           pace: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
-          bright: "{{ states('input_number.led_panel_day_brightness') | int(60) }}"
+          bright: "{{ states('input_number.led_wide_day_brightness') | int(60) }}"
       - action: counter.increment
         target:
           entity_id: counter.led_wide_slot
@@ -185,8 +206,8 @@ automation:
         entity_id:
           - input_boolean.led_wide_screen_off
           - binary_sensor.led_panel_night
-          - input_number.led_panel_day_brightness
-          - input_number.led_panel_night_brightness
+          - input_number.led_wide_day_brightness
+          - input_number.led_wide_night_brightness
         id: now
     conditions:
       # a picture runs 10 s: don't interrupt it
@@ -220,3 +241,27 @@ automation:
             sequence:
               - action: script.led_wide_picture
                 continue_on_error: true
+
+  # new sliders start at their minimum: copy the big panel's values once
+  - id: led_wide_first_run
+    alias: LED panel 2 - first-run brightness
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: automation_reloaded
+    actions:
+      - if: "{{ states('input_number.led_wide_day_brightness') | float(0) <= 10 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.led_wide_day_brightness
+            data:
+              value: "{{ states('input_number.led_panel_day_brightness') | float(60) }}"
+      - if: "{{ states('input_number.led_wide_night_brightness') | float(0) <= 5 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.led_wide_night_brightness
+            data:
+              value: "{{ states('input_number.led_panel_night_brightness') | float(40) }}"
