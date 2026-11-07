@@ -198,7 +198,8 @@ SHOW_ROOM_SCHEMA = vol.Schema(
     {**BASE, **ANIMATION,
      vol.Required("name"): cv.string,
      vol.Optional("temperature"): vol.Any(None, cv.string, vol.Coerce(float)),
-     vol.Optional("humidity"): vol.Any(None, cv.string, vol.Coerce(float))}
+     vol.Optional("humidity"): vol.Any(None, cv.string, vol.Coerce(float)),
+     vol.Optional("target"): vol.Any(None, cv.string, vol.Coerce(float))}
 )
 SHOW_SKY_SCHEMA = vol.Schema(
     {**BASE, **ANIMATION,
@@ -550,10 +551,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             return None
 
     async def show_room(call: ServiceCall) -> None:
-        """A room: house with a lit window, name, temperature, humidity."""
+        """A room: steaming pot, name, temperature, humidity (or the set point)."""
         panel = await _wide_panel(call)
         temp, hum = _number(call.data.get("temperature")), _number(call.data.get("humidity"))
-        await _play(call, panel, lambda f: render_room(call.data["name"], temp, hum, f))
+        target = _number(call.data.get("target"))
+        await _play(call, panel, lambda f: render_room(call.data["name"], temp, hum, f, target))
 
     async def _history(entity_id: str, start) -> list[tuple]:
         """(time, number) pairs from the recorder since start; [] without a recorder."""

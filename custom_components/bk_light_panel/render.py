@@ -74,6 +74,7 @@ _GLYPHS: dict[str, tuple[str, ...]] = {
     "°": (".#.", "#.#", ".#.", "...", "..."),
     "↑": (".#.", "###", "#.#", ".#.", ".#."),
     "↓": (".#.", ".#.", "#.#", "###", ".#."),
+    "→": ("..#.", "...#", "####", "...#", "..#."),
     "↔": (".....", ".#.#.", "#####", ".#.#.", "....."),
 }
 
@@ -317,8 +318,12 @@ def _flip_face(
     hinge: int = HINGE,
     digit_top: int = DIGIT_TOP,
     radius: float = 1.2,
+    centred: bool = False,
 ) -> Image.Image:
-    """Two split-flap cards with the digits, no animation."""
+    """Two split-flap cards with the digits, no animation.
+
+    centred: odd-width cards with the digits exactly between the pins.
+    """
     from .gfx import Canvas  # gfx does not import render, no cycle
 
     c = Canvas()
@@ -333,7 +338,7 @@ def _flip_face(
     digits = (time_text.replace(":", "") + "----")[:4]
     for card, (x0, x1) in enumerate(cards):
         pair = digits[card * 2: card * 2 + 2]
-        x = x0 + (x1 - x0 - 11) // 2 + 1
+        x = x0 + (x1 - x0 - 11) // 2 + (0 if centred else 1)
         for ch in pair:
             glyph = _BIG.get(ch, _BIG["-"])
             for ry, row in enumerate(glyph):

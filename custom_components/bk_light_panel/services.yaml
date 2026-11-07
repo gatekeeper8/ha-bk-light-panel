@@ -493,6 +493,14 @@ show_room:
           max: 100
           step: any
           mode: box
+    target:
+      example: 20
+      selector:
+        number:
+          min: 0
+          max: 40
+          step: any
+          mode: box
     duration:
       default: 10
       selector:

@@ -100,9 +100,9 @@ script:
     mode: queued
     max: 2
     variables:
-      # the kitchen sensors (change to yours)
-      kitchen_temperature: sensor.kitchen_temperature
-      kitchen_humidity: sensor.kitchen_humidity
+      # the kitchen: a climate entity (e.g. a Netatmo radiator valve) gives
+      # the current temperature and what it heats to
+      kitchen: climate.kuchnia
     sequence:
       - variables:
           night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
@@ -111,14 +111,15 @@ script:
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
       # every other minute the kitchen (where the panel hangs) instead
-      - if: "{{ now().minute % 2 == 1 and states(kitchen_temperature) not in ['unknown', 'unavailable'] }}"
+      - if: "{{ now().minute % 2 == 1 and state_attr(kitchen, 'current_temperature') is number }}"
         then:
           - action: bk_light_panel.show_room
             data:
               panel: LED_BLE_XXXXXXXX
               name: Kitchen
-              temperature: "{{ states(kitchen_temperature) }}"
-              humidity: "{{ states(kitchen_humidity) }}"
+              temperature: "{{ state_attr(kitchen, 'current_temperature') }}"
+              humidity: "{{ state_attr(kitchen, 'current_humidity') }}"
+              target: "{{ state_attr(kitchen, 'temperature') }}"
               duration: 0
               frame_interval: 0
               tint: "{{ [255, 25, 0] if night else none }}"

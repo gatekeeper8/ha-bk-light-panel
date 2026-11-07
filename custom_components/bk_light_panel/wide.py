@@ -32,8 +32,9 @@ from .render import (
 
 WIDTH, HEIGHT = 64, 16
 # smaller, rounder flip cards for the 16 pixel high panel
-FLIP_CARDS = {"cards": ((2, 15), (17, 30)), "top": 2, "bottom": 14, "hinge": 8,
-              "digit_top": 4, "radius": 2.6}
+# 15 wide: pin, 1 free, 11 digits, 1 free, pin - the same on both sides
+FLIP_CARDS = {"cards": ((0, 15), (16, 31)), "top": 2, "bottom": 14, "hinge": 8,
+              "digit_top": 4, "radius": 2.6, "centred": True}
 SIZE = (WIDTH, HEIGHT)
 RGB = tuple[int, int, int]
 

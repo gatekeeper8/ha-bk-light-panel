@@ -203,24 +203,53 @@ def comfort_color(temperature: float | None) -> RGB:
     return (255, 150, 60)
 
 
-def _house(frame: int) -> Image.Image:
-    c = Canvas()
-    c.paint(c.vgrad((235, 120, 70), (170, 60, 40), 1, 7), c.poly_mask([(7.5, 1.0), (14.5, 7.5), (0.5, 7.5)]))
-    c.paint(c.vgrad((225, 220, 205), (160, 150, 135), 7, 15), c.rrect_mask((2.5, 7.0, 12.5, 15.0), 0.5))
-    glow = 0.75 + 0.25 * math.sin(frame * 0.9)
-    window = c.rrect_mask((4.0, 8.5, 7.5, 11.5), 0.3)
-    c.glow(window, (255, 190, 80), radius=1.0, strength=0.5 * glow)
-    c.paint((255, int(190 * glow), 80), window)
-    c.paint((110, 70, 40), c.rrect_mask((9.0, 10.0, 11.0, 15.0), 0.3))
-    return c.finish().crop((0, 0, 16, 16))
+_POT = (
+    ".......KK.......",
+    "....LLLLLLLL....",
+    "..RRRRRRRRRRRR..",
+    "hhBBBBBBBBBBBBhh",
+    "hhBHBBBBBBBBBBhh",
+    "..BHBBBBBBBBBB..",
+    "..BBBBBBBBBBBB..",
+    "..DBBBBBBBBBBD..",
+    "...DDDDDDDDDD...",
+)
+_POT_COLORS = {"K": (95, 95, 105), "L": (255, 125, 100), "R": (200, 50, 40), "B": (230, 60, 45),
+               "H": (255, 175, 155), "D": (150, 30, 25), "h": (125, 35, 28)}
+
+
+def _kitchen(frame: int) -> Image.Image:
+    """Pixel-art red enamel pot on a gas flame, steam rising."""
+    image = Image.new("RGB", (16, 16), (0, 0, 0))
+    px = image.load()
+    for ry, row in enumerate(_POT):
+        for rx, key in enumerate(row):
+            if key != ".":
+                px[rx, 4 + ry] = _POT_COLORS[key]
+    for x in range(2, 14):  # burner ring and flickering tips
+        px[x, 15] = (50, 100, 255)
+    for x in range(3 + frame % 2, 14, 3):
+        px[x, 14] = (160, 205, 255)
+    for i, x0 in enumerate((5, 8, 11)):  # steam wisps, rising and swaying
+        for k in range(2):
+            y = 3 - ((frame + i * 2 + k * 2) % 4)
+            if 0 <= y <= 3:
+                x = x0 + (1 if (frame + i + y) % 4 < 2 else 0)
+                fade = 0.45 + 0.55 * (y / 3)
+                px[x, y] = tuple(int(v * fade) for v in (225, 225, 240))
+    return image
 
 
 def render_room(
-    name: str, temperature: float | None, humidity: float | None = None, frame: int = 0
+    name: str,
+    temperature: float | None,
+    humidity: float | None = None,
+    frame: int = 0,
+    target: float | None = None,
 ) -> Image.Image:
-    """House with a lit window; room name, temperature (comfort colour), humidity."""
+    """Steaming pot; room name, temperature (comfort colour), humidity or set point."""
     image = _blank()
-    image.paste(_house(frame), (0, 0))
+    image.paste(_kitchen(frame), (0, 0))
     pixels = image.load()
     label = name.upper()
     while label and font7.width(label) > 46:
@@ -232,6 +261,9 @@ def render_room(
     if humidity is not None:
         hum = f"{humidity:.0f}%"
         font7.draw(pixels, hum, W - font7.width(hum), 9, (90, 170, 255))
+    elif target is not None:  # e.g. a radiator valve: what it is heating to
+        aim = f"→{target:.0f}°"
+        _small(pixels, aim, W - text_width(aim), 11, (255, 170, 90))
     return image
 
 

@@ -388,7 +388,7 @@
     },
     "show_room": {
       "name": "Show room",
-      "description": "64x16 panels: a house with a lit window, the room name, its temperature (blue cold, green comfortable, orange warm) and humidity.",
+      "description": "64x16 panels: a steaming pot, the room name, its temperature (blue cool, green comfortable, orange warm) and humidity, or the set point of a radiator valve.",
       "fields": {
         "name": {
           "name": "Name",
@@ -421,6 +421,10 @@
         "panel": {
           "name": "Panel",
           "description": "Name or Bluetooth address; only needed with several panels."
+        },
+        "target": {
+          "name": "Set point",
+          "description": "Shown as →20° when there is no humidity, e.g. a radiator valve's target."
         }
       }
     },
