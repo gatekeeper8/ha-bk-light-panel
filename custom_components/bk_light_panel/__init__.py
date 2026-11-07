@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
+from datetime import timedelta
 from functools import partial
 
 from io import BytesIO
@@ -20,7 +22,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
@@ -50,7 +52,16 @@ from .const import (
     SERVICE_SHOW_IMAGE,
     SERVICE_SHOW_TEXT,
 )
-from .aircraft import pick_nearest, render_aircraft
+from .aircraft import pick_nearby, render_aircraft
+from .boards import (
+    RETRO,
+    render_flight_board,
+    render_retro,
+    render_room,
+    render_sky_graph,
+    render_traffic,
+    sky_columns,
+)
 from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_at, render_aurora, summary
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .panel import BkLightPanel
@@ -58,7 +69,6 @@ from .readings import ORDER as READING_KINDS, render_readings
 from .wide import (
     is_wide,
     slide_frames,
-    render_aircraft_wide,
     render_aurora_wide,
     render_clock_wide,
     render_icon_wide,
@@ -147,6 +157,8 @@ SHOW_AIRCRAFT_SCHEMA = vol.Schema(
         vol.Optional("longitude"): cv.longitude,
         vol.Optional(ATTR_DURATION, default=8): vol.All(vol.Coerce(float), vol.Range(0, 60)),
         vol.Optional("frame_interval", default=1.5): vol.All(vol.Coerce(float), vol.Range(0, 10)),
+        # wide panels: how many of the nearest planes to show in turn
+        vol.Optional("count", default=3): vol.All(vol.Coerce(int), vol.Range(1, 6)),
     }
 )
 SHOW_AURORA_SCHEMA = vol.Schema(
@@ -172,6 +184,39 @@ SHOW_READINGS_SCHEMA = vol.Schema(
         vol.Optional("transition", default="none"): TRANSITION,
     }
 )
+ANIMATION = {
+    vol.Optional(ATTR_DURATION, default=10): vol.All(vol.Coerce(float), vol.Range(0, 120)),
+    vol.Optional("frame_interval", default=1.0): vol.All(vol.Coerce(float), vol.Range(0, 10)),
+    vol.Optional("tint"): vol.Any(None, COLOR),
+}
+SHOW_RETRO_SCHEMA = vol.Schema(
+    {**BASE, **ANIMATION,
+     vol.Optional("screen", default="random"): vol.In([*RETRO, "random"]),
+     vol.Optional("text"): vol.Any(None, cv.string)}
+)
+SHOW_ROOM_SCHEMA = vol.Schema(
+    {**BASE, **ANIMATION,
+     vol.Required("name"): cv.string,
+     vol.Optional("temperature"): vol.Any(None, cv.string, vol.Coerce(float)),
+     vol.Optional("humidity"): vol.Any(None, cv.string, vol.Coerce(float))}
+)
+SHOW_SKY_SCHEMA = vol.Schema(
+    {**BASE, **ANIMATION,
+     vol.Required("weather"): cv.entity_id,
+     vol.Optional("history"): cv.entity_id,
+     vol.Optional("hours_back", default=6): vol.All(vol.Coerce(float), vol.Range(0, 12))}
+)
+SHOW_TRAFFIC_SCHEMA = vol.Schema(
+    {**BASE, **ANIMATION,
+     vol.Required("download"): cv.entity_id,
+     vol.Optional("upload"): cv.entity_id,
+     vol.Optional("minutes", default=30): vol.All(vol.Coerce(float), vol.Range(1, 1440)),
+     vol.Optional("max_rate"): vol.All(vol.Coerce(float), vol.Range(0.1, 100000))}
+)
+# Mbit/s from common data-rate units
+RATE_TO_MBIT = {"bit/s": 1e-6, "kbit/s": 1e-3, "Mbit/s": 1.0, "Gbit/s": 1e3,
+                "B/s": 8e-6, "kB/s": 8e-3, "KiB/s": 8.192e-3, "MB/s": 8.0, "MiB/s": 8.388608,
+                "GB/s": 8e3}
 AURORA_CACHE_SECONDS = 15 * 60
 NOWCAST_CACHE_SECONDS = 10 * 60
 
@@ -386,17 +431,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         except (TimeoutError, aiohttp.ClientError, ValueError) as err:
             _LOGGER.debug("ADS-B data from %s not available: %s", url, err)
             return {"found": False, "error": str(err) or type(err).__name__}
-        nearest = pick_nearest(data, lat, lon, call.data["max_distance"])
-        if nearest is None:
+        planes = pick_nearby(data, lat, lon, call.data["max_distance"], call.data["count"])
+        if not planes:
             return {"found": False}
+        nearest = planes[0]
         panel = _panel_for(hass, call)
         brightness = call.data[ATTR_BRIGHTNESS]
-        draw = render_aircraft_wide if is_wide(await panel.async_get_size()) else render_aircraft
-        await _animate(
-            hass, panel, lambda f: to_png(draw(nearest, f), brightness),
-            call.data[ATTR_DURATION], call.data["frame_interval"],
-        )
-        return {"found": True, **nearest}
+        if not is_wide(await panel.async_get_size()):
+            await _animate(
+                hass, panel, lambda f: to_png(render_aircraft(nearest, f), brightness),
+                call.data[ATTR_DURATION], call.data["frame_interval"],
+            )
+            return {"found": True, **nearest}
+        # flight board: the nearest planes in turn, the next one sliding in
+        each = call.data[ATTR_DURATION] / len(planes)
+        max_km = call.data["max_distance"]
+        for i, plane in enumerate(planes):
+            if i:
+                old = render_flight_board(planes[i - 1], 5, max_km)
+                for frame in slide_frames(old, render_flight_board(plane, 0, max_km)):
+                    await panel.async_send_png(await hass.async_add_executor_job(to_png, frame, brightness))
+            await _animate(
+                hass, panel, lambda f, p=plane: to_png(render_flight_board(p, f, max_km), brightness),
+                each, call.data["frame_interval"],
+            )
+        return {"found": True, **nearest, "nearby": len(planes)}
 
     aurora_cache: dict[str, tuple[float, object]] = {}
 
@@ -463,6 +522,135 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
         await _send_screen(hass, panel, png, "readings", call.data["transition"])
 
+    async def _wide_panel(call: ServiceCall) -> BkLightPanel:
+        panel = _panel_for(hass, call)
+        if not is_wide(await panel.async_get_size()):
+            raise ServiceValidationError(f"{call.service} needs a wide 64x16 panel")
+        return panel
+
+    async def _play(call: ServiceCall, panel: BkLightPanel, draw) -> None:
+        brightness, tint = call.data[ATTR_BRIGHTNESS], call.data.get("tint")
+        await _animate(
+            hass, panel, lambda f: to_png(apply_tint(draw(f), tint), brightness),
+            call.data[ATTR_DURATION], call.data["frame_interval"],
+        )
+
+    async def show_retro(call: ServiceCall) -> None:
+        """Atari READY., Commodore 64 start-up screen or marching Space Invaders."""
+        panel = await _wide_panel(call)
+        screen = call.data["screen"]
+        if screen == "random":
+            screen = random.choice(RETRO)
+        await _play(call, panel, lambda f: render_retro(screen, f, call.data.get("text")))
+
+    def _number(value) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    async def show_room(call: ServiceCall) -> None:
+        """A room: house with a lit window, name, temperature, humidity."""
+        panel = await _wide_panel(call)
+        temp, hum = _number(call.data.get("temperature")), _number(call.data.get("humidity"))
+        await _play(call, panel, lambda f: render_room(call.data["name"], temp, hum, f))
+
+    async def _history(entity_id: str, start) -> list[tuple]:
+        """(time, number) pairs from the recorder since start; [] without a recorder."""
+        try:
+            from homeassistant.components.recorder import get_instance, history
+
+            states = await get_instance(hass).async_add_executor_job(
+                partial(history.state_changes_during_period, hass, start, None, entity_id,
+                        include_start_time_state=True)
+            )
+        except Exception as err:  # noqa: BLE001 - recorder off or not ready: draw without
+            _LOGGER.debug("No history for %s: %s", entity_id, err)
+            return []
+        points = []
+        for state in states.get(entity_id, []):
+            value = _number(state.state)
+            if value is not None:
+                points.append((max(state.last_changed, start), value))
+        return points
+
+    def _is_day_factory():
+        from homeassistant.helpers.sun import get_astral_event_date
+
+        cache: dict = {}
+
+        def is_day(moment) -> bool:
+            day = dt_util.as_local(moment).date()
+            if day not in cache:
+                cache[day] = (get_astral_event_date(hass, "sunrise", day),
+                              get_astral_event_date(hass, "sunset", day))
+            rise, sett = cache[day]
+            if rise is None or sett is None:  # polar day / night
+                return dt_util.as_local(moment).month in (4, 5, 6, 7, 8, 9)
+            return rise <= moment < sett
+
+        return is_day
+
+    async def show_sky_graph(call: ServiceCall) -> None:
+        """24 h of temperature: the last hours from history, then the hourly forecast."""
+        panel = await _wide_panel(call)
+        now = dt_util.now()
+        back = timedelta(hours=call.data["hours_back"] if call.data.get("history") else 0)
+        start = now - back
+        points = await _history(call.data["history"], start) if call.data.get("history") else []
+        try:
+            reply = await hass.services.async_call(
+                "weather", "get_forecasts", {"entity_id": call.data["weather"], "type": "hourly"},
+                blocking=True, return_response=True,
+            )
+            forecast = (reply or {}).get(call.data["weather"], {}).get("forecast", [])
+        except HomeAssistantError as err:
+            _LOGGER.debug("No forecast from %s: %s", call.data["weather"], err)
+            forecast = []
+        for item in forecast:
+            moment = dt_util.parse_datetime(str(item.get("datetime", "")))
+            value = _number(item.get("temperature"))
+            if moment and value is not None and moment >= now - timedelta(minutes=30):
+                points.append((moment, value))
+        now_col = round(back / timedelta(hours=24) * 64)
+        temps, daylight = await hass.async_add_executor_job(
+            sky_columns, points, start, _is_day_factory()
+        )
+        await _play(call, panel, lambda f: render_sky_graph(temps, daylight, now_col, f))
+
+    async def show_traffic(call: ServiceCall) -> None:
+        """Network traffic of the last minutes: download up, upload down, live rates."""
+        panel = await _wide_panel(call)
+        now = dt_util.utcnow()
+        window = timedelta(minutes=call.data["minutes"])
+        start = now - window
+
+        async def columns(entity_id: str | None) -> list[float]:
+            if not entity_id:
+                return []
+            state = hass.states.get(entity_id)
+            factor = RATE_TO_MBIT.get(state.attributes.get("unit_of_measurement", "Mbit/s"), 1.0) if state else 1.0
+            points = await _history(entity_id, start)
+            if state is not None and _number(state.state) is not None:
+                points.append((now, _number(state.state)))
+            values: list[float] = []
+            j = 0
+            for i in range(64):  # the value at the end of each slice
+                t = start + window * (i + 1) / 64
+                while j + 1 < len(points) and points[j + 1][0] <= t:
+                    j += 1
+                values.append(points[j][1] * factor if points and points[0][0] <= t else 0.0)
+            return values
+
+        down, up = await columns(call.data["download"]), await columns(call.data.get("upload"))
+        if not up:
+            up = [0.0] * len(down)
+        await _play(call, panel, lambda f: render_traffic(down, up, f, call.data.get("max_rate")))
+
+    hass.services.async_register(DOMAIN, "show_retro", show_retro, SHOW_RETRO_SCHEMA)
+    hass.services.async_register(DOMAIN, "show_room", show_room, SHOW_ROOM_SCHEMA)
+    hass.services.async_register(DOMAIN, "show_sky_graph", show_sky_graph, SHOW_SKY_SCHEMA)
+    hass.services.async_register(DOMAIN, "show_traffic", show_traffic, SHOW_TRAFFIC_SCHEMA)
     hass.services.async_register(DOMAIN, "show_readings", show_readings, SHOW_READINGS_SCHEMA)
     hass.services.async_register(
         DOMAIN, "show_aurora", show_aurora, SHOW_AURORA_SCHEMA,

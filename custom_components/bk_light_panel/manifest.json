@@ -1,6 +1,9 @@
 {
   "domain": "bk_light_panel",
   "name": "BK-Light LED panel",
+  "after_dependencies": [
+    "recorder"
+  ],
   "bluetooth": [
     {
       "local_name": "LED_BLE_*",

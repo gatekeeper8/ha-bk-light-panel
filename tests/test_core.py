@@ -487,3 +487,25 @@ def test_font7_glyphs_are_consistent():
     assert font7.fits("SAT 7") and font7.width("SAT 7") <= 30
     for word in ("CHARGING", "CRESCENT", "AUTUMN", "LOT3925", "↑10.5KM"):
         assert font7.width(word) <= 46, word
+
+
+def test_wide_boards():
+    from datetime import UTC, datetime, timedelta
+
+    _load_all()
+    boards = _load("boards")
+    plane = {"callsign": "LOT3925", "type": "B738", "country": "PL", "track": 250,
+             "altitude_m": 10500, "distance_km": 23}
+    start = datetime(2026, 11, 7, 14, tzinfo=UTC)
+    points = [(start + timedelta(hours=h), 5.0 + h * 0.2) for h in range(25)]
+    temps, day = boards.sky_columns(points, start, lambda t: 7 <= t.hour < 16)
+    assert len(temps) == 64 and None not in temps and day[0] and not day[20]
+    images = [
+        boards.render_flight_board(plane, 0, 80), boards.render_flight_board({"callsign": "X"}, 5),
+        boards.render_sky_graph(temps, day, 16, 1), boards.render_sky_graph([None] * 64, [True] * 64, 0),
+        boards.render_room("Kitchen", 22.4, 45, 2), boards.render_room("Kitchen", None),
+        boards.render_traffic([10, 50, 120], [2, 5, 9], 3), boards.render_traffic([], [], 0),
+    ]
+    images += [boards.render_retro(name, f) for name in boards.RETRO for f in (0, 7, 15)]
+    assert all(image.size == (64, 16) for image in images)
+    assert boards.comfort_color(22) == (110, 235, 140)

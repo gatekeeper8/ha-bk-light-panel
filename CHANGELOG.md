@@ -12,6 +12,12 @@
   only where a text does not fit.
 - `transition: slide` for `show_clock` and `show_readings`: the new screen pushes a
   different one out to the left. 64×16 flip cards are smaller with rounder corners.
+- New 64×16 screens: `show_sky_graph` (24 h temperature from history and the hourly
+  forecast, day warm with a sun, night blue with stars), `show_room` (a room's
+  temperature and humidity), `show_traffic` (network download / upload of the last
+  minutes from history, e.g. SNMP sensors of a router), `show_retro` (Atari `READY.`,
+  Commodore 64 start-up screen, Space Invaders). On 64×16 the nearest plane becomes a
+  flight board showing the nearest planes in turn (`count`).
 - Example package `examples/led_panel_wide.yaml`: a 64×16 panel as a second clock with
   the date, alternating with the outdoor readings, red at night.
 

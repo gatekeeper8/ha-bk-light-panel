@@ -253,6 +253,10 @@
         "frame_interval": {
           "name": "Frame interval",
           "description": "Seconds between animation frames. The panel needs time to show each frame; too fast makes it lag behind. 0 = still picture."
+        },
+        "count": {
+          "name": "Planes",
+          "description": "64x16 panels: the nearest planes in turn, each sliding in."
         }
       }
     },
@@ -345,6 +349,158 @@
         "transition": {
           "name": "Transition",
           "description": "slide = the new screen pushes a different one out to the left (e.g. clock after readings)."
+        }
+      }
+    },
+    "show_retro": {
+      "name": "Show retro screen",
+      "description": "64x16 panels: Atari READY., the Commodore 64 start-up screen or marching Space Invaders (random = one of them).",
+      "fields": {
+        "screen": {
+          "name": "Screen",
+          "description": "atari, c64, invaders or random."
+        },
+        "text": {
+          "name": "Text",
+          "description": "Atari and C64: the scrolling line; Invaders: a caption, e.g. DING DONG!"
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_room": {
+      "name": "Show room",
+      "description": "64x16 panels: a house with a lit window, the room name, its temperature (blue cold, green comfortable, orange warm) and humidity.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Room name, e.g. Kitchen."
+        },
+        "temperature": {
+          "name": "Temperature",
+          "description": "°C."
+        },
+        "humidity": {
+          "name": "Humidity",
+          "description": "%."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_sky_graph": {
+      "name": "Show sky graph",
+      "description": "64x16 panels: 24 hours of temperature, the last hours from history and the hourly forecast; day warm with a sun, night blue with stars, now as a blinking line.",
+      "fields": {
+        "weather": {
+          "name": "Weather",
+          "description": "Weather entity with an hourly forecast."
+        },
+        "history": {
+          "name": "History sensor",
+          "description": "Temperature sensor for the hours before now (needs the recorder)."
+        },
+        "hours_back": {
+          "name": "Hours back",
+          "description": "How much of the past to show."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_traffic": {
+      "name": "Show network traffic",
+      "description": "64x16 panels: download (up) and upload (down) of the last minutes from history, with the current rates and packets running along the middle.",
+      "fields": {
+        "download": {
+          "name": "Download sensor",
+          "description": "Data-rate sensor (bit/s, kbit/s, Mbit/s, B/s, kB/s, MB/s ...)."
+        },
+        "upload": {
+          "name": "Upload sensor",
+          "description": "Data-rate sensor."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Time across the panel."
+        },
+        "max_rate": {
+          "name": "Top of the graph",
+          "description": "Mbit/s; empty = the highest value shown."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
         }
       }
     }

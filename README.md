@@ -88,6 +88,7 @@ second clock with the date, alternating every minute with the outdoor readings a
 rotating picture (weather, nearest plane, aurora, smog, moon, heating, season).
 
 ![64x16 layouts](images/wide_panel.png)
+![64x16 screens](images/wide_screens.png)
 
 ## Actions
 
@@ -102,6 +103,10 @@ or address.
 | `bk_light_panel.show_nearest_aircraft` | Closest plane from your ADS-B `aircraft.json` (`url`, `max_distance`); returns the plane's data |
 | `bk_light_panel.show_aurora` | NOAA Kp forecast for the next 24 h; `min_kp`, `show: false` = only return the data |
 | `bk_light_panel.show_readings` | Up to four readings with icons, coloured by level: `temperature`, `humidity`, `pm25`, `pm10`, `pressure` |
+| `bk_light_panel.show_sky_graph` | 64×16: 24 h of temperature (history + hourly forecast), day and night marked |
+| `bk_light_panel.show_room` | 64×16: a room's name, temperature and humidity |
+| `bk_light_panel.show_traffic` | 64×16: network download / upload of the last minutes, from data-rate sensors |
+| `bk_light_panel.show_retro` | 64×16: Atari `READY.`, Commodore 64 start-up screen, Space Invaders |
 | `bk_light_panel.show_image` | Your own picture file (must be in an allowed folder, e.g. `/config/www`) |
 | `bk_light_panel.fill` / `clear` | One colour / black |
 
