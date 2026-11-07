@@ -378,3 +378,22 @@ def test_ovation_nowcast_at_home_and_north():
     west = aurora.ovation_at({"coordinates": [[358, 52, 40]]}, 52.0, -2.0)
     assert west["nowcast_local"] == 40
     assert aurora.ovation_at({}, 50, 19)["nowcast_local"] is None
+
+
+def test_no_validation_command_by_default():
+    """The validation command makes the panel flash its stored animations."""
+    async def run():
+        fake = FakePanel()
+        session = protocol.PanelSession(fake, max_write=509)
+        protocol.STEP_DELAY, saved = 0, protocol.STEP_DELAY
+        try:
+            await session.start()
+            png = render.to_png(render.render_fill([255, 0, 0]))
+            for _ in range(65):
+                await session.send_png(png)
+        finally:
+            protocol.STEP_DELAY = saved
+        return fake
+
+    fake = asyncio.run(run())
+    assert not [w for w, _ in fake.writes if w == protocol.FRAME_VALIDATION]

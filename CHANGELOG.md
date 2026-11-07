@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+- Fix: the panel's stored phone-app animations flashed up briefly every 30th frame
+  (every 10 minutes with the night clock). The integration no longer sends the
+  "frame validation" command that caused it.
+
 ## 0.8.0
 - Location-aware aurora: `show_aurora` also returns NOAA's OVATION nowcast for your
   location: chance overhead (`nowcast_local`) and the highest chance just north of you
