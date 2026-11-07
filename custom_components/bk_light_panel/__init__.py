@@ -12,7 +12,10 @@ import logging
 import time
 from functools import partial
 
+from io import BytesIO
+
 import aiohttp
+from PIL import Image
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
@@ -54,6 +57,7 @@ from .panel import BkLightPanel
 from .readings import ORDER as READING_KINDS, render_readings
 from .wide import (
     is_wide,
+    slide_frames,
     render_aircraft_wide,
     render_aurora_wide,
     render_clock_wide,
@@ -76,6 +80,8 @@ type BkLightConfigEntry = ConfigEntry[BkLightPanel]
 COLOR = vol.All(
     vol.ExactSequence((cv.byte, cv.byte, cv.byte)), vol.Coerce(list)
 )
+
+TRANSITION = vol.In(["none", "slide"])
 
 BASE = {
     vol.Optional(ATTR_PANEL): cv.string,
@@ -129,6 +135,7 @@ SHOW_CLOCK_SCHEMA = vol.Schema(
         vol.Optional("style", default="classic"): vol.In(["classic", "flip"]),
         vol.Optional("animate", default=True): cv.boolean,
         vol.Optional("tint"): vol.Any(None, COLOR),
+        vol.Optional("transition", default="none"): TRANSITION,
     }
 )
 SHOW_AIRCRAFT_SCHEMA = vol.Schema(
@@ -162,6 +169,7 @@ SHOW_READINGS_SCHEMA = vol.Schema(
         # numbers (or unavailable / unknown, shown as --)
         **{vol.Optional(kind): vol.Any(None, cv.string, vol.Coerce(float)) for kind in READING_KINDS},
         vol.Optional("tint"): vol.Any(None, COLOR),
+        vol.Optional("transition", default="none"): TRANSITION,
     }
 )
 AURORA_CACHE_SECONDS = 15 * 60
@@ -193,6 +201,21 @@ async def _animate(hass, panel, render_frame, duration: float, interval: float) 
             return
         await asyncio.sleep(wait)
 _LOGGER = logging.getLogger(__name__)
+
+async def _send_screen(hass, panel, png: bytes, screen: str, transition: str) -> None:
+    """Send a screen; with transition 'slide' it pushes a different screen out to the left."""
+    old = panel.screen_png
+    if transition == "slide" and old and old != png and panel.last_screen != screen:
+
+        def frames() -> list[bytes]:
+            before, after = Image.open(BytesIO(old)).convert("RGB"), Image.open(BytesIO(png)).convert("RGB")
+            if before.size != after.size:
+                return []
+            return [to_png(frame) for frame in slide_frames(before, after)]
+
+        for frame in await hass.async_add_executor_job(frames):
+            await panel.async_send_png(frame)
+    await panel.async_send_png(png, screen)
 
 
 def _panel_for(hass: HomeAssistant, call: ServiceCall) -> BkLightPanel:
@@ -306,7 +329,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                   data.get("line2_color"), data.get("bar_value"), data["bar_max"])
         if is_wide(await panel.async_get_size()):
             previous = getattr(panel, "last_clock_time", None)
-            flip = data["style"] == "flip"
+            flip = data["style"] == "flip" and panel.last_screen == "clock"
             steps = (0, 1, 2) if flip and data["animate"] and previous and previous != time_text else (2,)
             for step in steps:
                 png = await hass.async_add_executor_job(
@@ -319,7 +342,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         data[ATTR_BRIGHTNESS],
                     )
                 )
-                await panel.async_send_png(png)
+                if step < 2:
+                    await panel.async_send_png(png, "clock")
+                else:
+                    await _send_screen(hass, panel, png, "clock", data["transition"])
             panel.last_clock_time = time_text
             return
         if data["style"] == "classic":
@@ -435,7 +461,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             lambda: to_png(apply_tint(render_readings(values, size), call.data.get("tint")),
                            call.data[ATTR_BRIGHTNESS])
         )
-        await panel.async_send_png(png)
+        await _send_screen(hass, panel, png, "readings", call.data["transition"])
 
     hass.services.async_register(DOMAIN, "show_readings", show_readings, SHOW_READINGS_SCHEMA)
     hass.services.async_register(

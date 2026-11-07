@@ -8,6 +8,8 @@
   images use the full 64×16. Existing 32×32 setups are unchanged.
 - New action `show_readings`: temperature, humidity, PM2.5, PM10 and pressure with small
   icons, each coloured by level (2×2 grid on 64×16, four rows on 32×32).
+- `transition: slide` for `show_clock` and `show_readings`: the new screen pushes a
+  different one out to the left. 64×16 flip cards are smaller with rounder corners.
 - Example package `examples/led_panel_wide.yaml`: a 64×16 panel as a second clock with
   the date, alternating with the outdoor readings, red at night.
 

@@ -8,7 +8,8 @@
 # CLOCK every minute: flip cards on the left, weekday + day and month on
 #   the right. Tariff colour on the hinges like the big panel.
 # READINGS from :20 to :40 of every minute: temperature, humidity, PM2.5,
-#   pressure, each coloured by level.
+#   pressure, each coloured by level. Clock and readings slide in from the
+#   right; the clock flips at the full minute.
 # NIGHT: everything red and dim, like the big panel.
 # OFF: helper "LED panel 2 - screen off" on = black screen, still connected.
 #
@@ -44,6 +45,7 @@ script:
         data:
           panel: LED_BLE_XXXXXXXX
           style: "{{ 'classic' if is_state('input_select.led_panel_clock_style', 'classic') else 'flip' }}"
+          transition: slide
           tint: "{{ [255, 25, 0] if night else none }}"
           time_color: "{{ [120, 230, 140] if cheap else [255, 150, 110] }}"
           line1: "{{ now().strftime('%a') | upper }} {{ now().day }}"
@@ -69,6 +71,7 @@ script:
           humidity: "{{ states('sensor.smogomierz_humidity') }}"
           pm25: "{{ states('sensor.smogomierz_pm2_5') }}"
           pressure: "{{ states('sensor.smogomierz_pressure_sea_level') }}"
+          transition: slide
           tint: "{{ [255, 25, 0] if night else none }}"
           brightness: >-
             {%- if night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}

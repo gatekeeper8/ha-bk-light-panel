@@ -211,6 +211,10 @@
         "tint": {
           "name": "Tint",
           "description": "Show the whole clock in one colour, e.g. red at night. Empty = normal colours."
+        },
+        "transition": {
+          "name": "Transition",
+          "description": "slide = the new screen pushes a different one out to the left (e.g. clock after readings)."
         }
       }
     },
@@ -337,6 +341,10 @@
         "panel": {
           "name": "Panel",
           "description": "Name or Bluetooth address; only needed with several panels."
+        },
+        "transition": {
+          "name": "Transition",
+          "description": "slide = the new screen pushes a different one out to the left (e.g. clock after readings)."
         }
       }
     }

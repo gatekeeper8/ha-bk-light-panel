@@ -465,3 +465,15 @@ def test_readings_both_sizes():
     assert readings.text_for("temperature", 6.14) == "6.1°"
     assert readings.text_for("temperature", -12.3) == "-12°"
     assert readings.color_for("pm25", 88) == (255, 30, 30)
+
+
+def test_slide_frames_push_left():
+    from PIL import Image as PILImage
+
+    wide, _ = _load_all()
+    old = PILImage.new("RGB", (64, 16), (255, 0, 0))
+    new = PILImage.new("RGB", (64, 16), (0, 0, 255))
+    frames = wide.slide_frames(old, new)
+    assert len(frames) == 3
+    assert frames[0].getpixel((0, 0)) == (255, 0, 0) and frames[0].getpixel((63, 0)) == (0, 0, 255)
+    assert frames[1].getpixel((31, 0)) == (255, 0, 0) and frames[1].getpixel((32, 0)) == (0, 0, 255)

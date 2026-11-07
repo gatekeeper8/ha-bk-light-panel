@@ -47,6 +47,8 @@ class BkLightPanel:
         self._closing = False
         self._shutting_down = False
         self._recover_task: asyncio.Task | None = None
+        # what kind of screen is shown ("clock", "readings"; None = anything else)
+        self.last_screen: str | None = None
         # (width, height), known after the first handshake
         self.size: tuple[int, int] | None = None
 
@@ -69,8 +71,14 @@ class BkLightPanel:
                 _LOGGER.debug("%s is %dx%d pixels", self.name, *self.size)
         return self.size
 
-    async def async_send_png(self, png: bytes) -> None:
+    @property
+    def screen_png(self) -> bytes | None:
+        """The picture that should be on the screen now."""
+        return self._wanted_png
+
+    async def async_send_png(self, png: bytes, screen: str | None = None) -> None:
         """Send one image, reconnecting once if the link dropped."""
+        self.last_screen = screen
         async with self._lock:
             self._stop_idle_timer()
             try:

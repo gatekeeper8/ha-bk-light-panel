@@ -31,12 +31,28 @@ from .render import (
 )
 
 WIDTH, HEIGHT = 64, 16
+# smaller, rounder flip cards for the 16 pixel high panel
+FLIP_CARDS = {"cards": ((2, 15), (17, 30)), "top": 2, "bottom": 14, "hinge": 8,
+              "digit_top": 4, "radius": 2.6}
 SIZE = (WIDTH, HEIGHT)
 RGB = tuple[int, int, int]
 
 
 def is_wide(size: tuple[int, int] | None) -> bool:
     return size == SIZE
+
+
+def slide_frames(old: Image.Image, new: Image.Image, steps: int = 3) -> list[Image.Image]:
+    """In-between pictures: the new screen pushes the old one out to the left."""
+    width, height = new.size
+    frames = []
+    for i in range(1, steps + 1):
+        shift = round(width * i / (steps + 1))
+        frame = Image.new("RGB", new.size, (0, 0, 0))
+        frame.paste(old.crop((shift, 0, width, height)), (0, 0))
+        frame.paste(new.crop((0, 0, shift, height)), (width - shift, 0))
+        frames.append(frame)
+    return frames
 
 
 def _blank() -> Image.Image:
@@ -93,7 +109,7 @@ def render_clock_wide(
     """Clock on the left half, the two lines and the level bar on the right."""
     image = _blank()
     if style == "flip":
-        face = render_flip_clock(time_text, previous, step, time_color)
+        face = render_flip_clock(time_text, previous, step, time_color, geometry=FLIP_CARDS)
         image.paste(face.crop((0, 0, 32, 16)), (0, 0))
     else:
         face = render_clock(time_text, time_color)

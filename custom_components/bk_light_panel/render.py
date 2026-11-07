@@ -307,29 +307,38 @@ CARDS = ((1, 15), (17, 31))  # x ranges of the hour and minute cards
 DIGIT_TOP = 5
 
 
-def _flip_face(time_text: str, pin_color: RGB) -> Image.Image:
+def _flip_face(
+    time_text: str,
+    pin_color: RGB,
+    cards=CARDS,
+    top: int = CARD_TOP,
+    bottom: int = CARD_BOTTOM,
+    hinge: int = HINGE,
+    digit_top: int = DIGIT_TOP,
+    radius: float = 1.2,
+) -> Image.Image:
     """Two split-flap cards with the digits, no animation."""
     from .gfx import Canvas  # gfx does not import render, no cycle
 
     c = Canvas()
-    for x0, x1 in CARDS:
-        top = c.rrect_mask((x0, CARD_TOP, x1, HINGE), 1.2)
-        c.paint(c.vgrad((70, 70, 76), (46, 46, 52), CARD_TOP, HINGE), top)
-        bottom = c.rrect_mask((x0, HINGE + 0.25, x1, CARD_BOTTOM), 1.2)
-        c.paint(c.vgrad((40, 40, 46), (26, 26, 30), HINGE, CARD_BOTTOM), bottom)
+    for x0, x1 in cards:
+        upper = c.rrect_mask((x0, top, x1, hinge), radius)
+        c.paint(c.vgrad((70, 70, 76), (46, 46, 52), top, hinge), upper)
+        lower = c.rrect_mask((x0, hinge + 0.25, x1, bottom), radius)
+        c.paint(c.vgrad((40, 40, 46), (26, 26, 30), hinge, bottom), lower)
     image = c.finish()
     pixels = image.load()
 
     digits = (time_text.replace(":", "") + "----")[:4]
-    for card, (x0, x1) in enumerate(CARDS):
+    for card, (x0, x1) in enumerate(cards):
         pair = digits[card * 2: card * 2 + 2]
         x = x0 + (x1 - x0 - 11) // 2 + 1
         for ch in pair:
             glyph = _BIG.get(ch, _BIG["-"])
             for ry, row in enumerate(glyph):
-                y = DIGIT_TOP + ry
-                shade = 1.0 if y < HINGE else 0.86
-                if y == HINGE:
+                y = digit_top + ry
+                shade = 1.0 if y < hinge else 0.86
+                if y == hinge:
                     shade = 0.5  # the split runs through the middle
                 for rx, pixel in enumerate(row):
                     if pixel == "#":
@@ -337,10 +346,10 @@ def _flip_face(time_text: str, pin_color: RGB) -> Image.Image:
             x += 6
         # hinge: dark gap across the card, coloured pins at both ends
         for hx in range(x0, x1):
-            if pixels[hx, HINGE][0] < 120:
-                pixels[hx, HINGE] = (6, 6, 8)
-        pixels[x0, HINGE] = pin_color
-        pixels[x1 - 1, HINGE] = pin_color
+            if pixels[hx, hinge][0] < 120:
+                pixels[hx, hinge] = (6, 6, 8)
+        pixels[x0, hinge] = pin_color
+        pixels[x1 - 1, hinge] = pin_color
     return image
 
 
@@ -360,27 +369,34 @@ def render_flip_clock(
     line2_color: list[int] | None = None,
     bar_value: float | None = None,
     bar_max: float = 75.0,
+    geometry: dict | None = None,
 ) -> Image.Image:
-    """Split-flap clock. step 0 and 1 are the flip in motion, 2 the final face."""
+    """Split-flap clock. step 0 and 1 are the flip in motion, 2 the final face.
+
+    geometry: other card sizes (cards, top, bottom, hinge, digit_top, radius).
+    """
+    g = {"cards": CARDS, "top": CARD_TOP, "bottom": CARD_BOTTOM, "hinge": HINGE,
+         "digit_top": DIGIT_TOP, "radius": 1.2, **(geometry or {})}
+    top, bottom, hinge = g["top"], g["bottom"], g["hinge"]
     pin = _color(time_color, (255, 236, 200))
-    new = _flip_face(time_text, pin)
+    new = _flip_face(time_text, pin, **g)
     image = new.copy()
     if previous and previous != time_text and step < 2:
-        old = _flip_face(previous, pin)
+        old = _flip_face(previous, pin, **g)
         old_d, new_d = previous.replace(":", ""), time_text.replace(":", "")
-        for card, (x0, x1) in enumerate(CARDS):
+        for card, (x0, x1) in enumerate(g["cards"]):
             if old_d[card * 2: card * 2 + 2] == new_d[card * 2: card * 2 + 2]:
                 continue
             # bottom half still shows the old digits
-            image.paste(old.crop((x0, HINGE + 1, x1, CARD_BOTTOM)), (x0, HINGE + 1))
+            image.paste(old.crop((x0, hinge + 1, x1, bottom)), (x0, hinge + 1))
             if step == 0:  # old top flap half-way down
-                flap = _squash(old, (x0, CARD_TOP, x1, HINGE), (HINGE - CARD_TOP) // 2)
+                flap = _squash(old, (x0, top, x1, hinge), (hinge - top) // 2)
                 flap = Image.eval(flap, lambda v: int(v * 0.7))
-                image.paste(flap, (x0, HINGE - flap.height))
+                image.paste(flap, (x0, hinge - flap.height))
             else:  # new bottom flap coming down
-                flap = _squash(new, (x0, HINGE + 1, x1, CARD_BOTTOM), (CARD_BOTTOM - HINGE - 1) // 2)
+                flap = _squash(new, (x0, hinge + 1, x1, bottom), (bottom - hinge - 1) // 2)
                 flap = Image.eval(flap, lambda v: int(v * 0.85))
-                image.paste(flap, (x0, HINGE + 1))
+                image.paste(flap, (x0, hinge + 1))
     pixels = image.load()
     if line1:
         _small_line(pixels, line1, 17, _color(line1_color, (255, 190, 110)))
