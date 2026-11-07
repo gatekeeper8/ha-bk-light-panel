@@ -6,6 +6,10 @@
   text lines beside it, pictures with the caption beside them, a flight-board line for
   the nearest plane, Kp bars with the peak for the aurora. Text, fill and your own
   images use the full 64×16. Existing 32×32 setups are unchanged.
+- New action `show_readings`: temperature, humidity, PM2.5, PM10 and pressure with small
+  icons, each coloured by level (2×2 grid on 64×16, four rows on 32×32).
+- Example package `examples/led_panel_wide.yaml`: a 64×16 panel as a second clock with
+  the date, alternating with the outdoor readings, red at night.
 
 ## 0.8.1
 - Fix: the panel's stored phone-app animations flashed up briefly every 30th frame

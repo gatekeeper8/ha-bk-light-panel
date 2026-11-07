@@ -301,6 +301,44 @@
           "description": "Your position for the nowcast. Default: the home location."
         }
       }
+    },
+    "show_readings": {
+      "name": "Show readings",
+      "description": "Up to four readings with small icons, coloured by level (temperature, humidity, PM2.5, PM10, pressure, in that order). Unavailable values show as --.",
+      "fields": {
+        "temperature": {
+          "name": "Temperature",
+          "description": "°C; coloured from blue (frost) to red (heat)."
+        },
+        "humidity": {
+          "name": "Humidity",
+          "description": "Relative humidity in %."
+        },
+        "pm25": {
+          "name": "PM2.5",
+          "description": "µg/m³; green, yellow, orange, red with the air quality."
+        },
+        "pm10": {
+          "name": "PM10",
+          "description": "µg/m³; coloured like PM2.5."
+        },
+        "pressure": {
+          "name": "Pressure",
+          "description": "hPa."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
     }
   }
 }

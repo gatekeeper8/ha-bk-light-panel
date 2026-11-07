@@ -349,3 +349,59 @@ show_aurora:
     panel:
       selector:
         text:
+
+show_readings:
+  fields:
+    temperature:
+      example: 9.6
+      selector:
+        number:
+          min: -60
+          max: 60
+          step: any
+          mode: box
+    humidity:
+      example: 78
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: any
+          mode: box
+    pm25:
+      example: 12
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: any
+          mode: box
+    pm10:
+      example: 20
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: any
+          mode: box
+    pressure:
+      example: 1013
+      selector:
+        number:
+          min: 800
+          max: 1100
+          step: any
+          mode: box
+    tint:
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:

@@ -83,6 +83,9 @@ flight-board line (plane on its track, flag, callsign / type, altitude / distanc
 the aurora shows the Kp bars with the peak hour. With several panels, name the one you
 mean with `panel:`.
 
+[`examples/led_panel_wide.yaml`](examples/led_panel_wide.yaml) turns a 64×16 panel into a
+second clock with the date, alternating every minute with the outdoor readings.
+
 ![64x16 layouts](images/wide_panel.png)
 
 ## Actions
@@ -97,6 +100,7 @@ or address.
 | `bk_light_panel.show_icon` | Built-in picture (weather state, `moon`, `season`, `autumn`…`summer`, `smog`, `heating`), `caption`, `duration`, `frame_interval` |
 | `bk_light_panel.show_nearest_aircraft` | Closest plane from your ADS-B `aircraft.json` (`url`, `max_distance`); returns the plane's data |
 | `bk_light_panel.show_aurora` | NOAA Kp forecast for the next 24 h; `min_kp`, `show: false` = only return the data |
+| `bk_light_panel.show_readings` | Up to four readings with icons, coloured by level: `temperature`, `humidity`, `pm25`, `pm10`, `pressure` |
 | `bk_light_panel.show_image` | Your own picture file (must be in an allowed folder, e.g. `/config/www`) |
 | `bk_light_panel.fill` / `clear` | One colour / black |
 

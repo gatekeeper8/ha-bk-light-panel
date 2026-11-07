@@ -1,0 +1,115 @@
+# LED panel 2 (BK-Light 64x16 wide) - clock with date and outdoor readings
+# Package: /config/packages/led_panel_wide.yaml
+# Needs the bk_light_panel integration 0.9.0 or newer.
+# Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
+#   night mode (binary_sensor.led_panel_night), day / night brightness,
+#   clock style (flip / classic).
+#
+# CLOCK every minute: flip cards on the left, weekday + day and month on
+#   the right. Tariff colour on the hinges like the big panel.
+# READINGS from :20 to :40 of every minute: temperature, humidity, PM2.5,
+#   pressure, each coloured by level.
+# NIGHT: everything red and dim, like the big panel.
+# OFF: helper "LED panel 2 - screen off" on = black screen, still connected.
+#
+# Change LED_BLE_XXXXXXXX to your panel's name (Settings -> Devices).
+# Entities used (check the names against yours):
+#   sensor.smogomierz_temperature, sensor.smogomierz_humidity,
+#   sensor.smogomierz_pm2_5, sensor.smogomierz_pressure_sea_level
+
+input_boolean:
+  # off by default, so the panel shows the clock straight after install
+  led_wide_screen_off:
+    name: LED panel 2 - screen off
+    icon: mdi:monitor-off
+
+script:
+  led_wide_clock:
+    alias: LED panel 2 - clock with date
+    mode: queued
+    max: 2
+    sequence:
+      - variables:
+          night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
+          wd: >-
+            {% if states('binary_sensor.workday_sensor') in ['on', 'off'] %}
+              {{ is_state('binary_sensor.workday_sensor', 'on') }}
+            {% else %}
+              {{ now().weekday() < 5 }}
+            {% endif %}
+          cheap: >-
+            {% set h = now().hour %}
+            {{ h >= 22 or h < 6 or (wd and 13 <= h < 15) }}
+      - action: bk_light_panel.show_clock
+        data:
+          panel: LED_BLE_XXXXXXXX
+          style: "{{ 'classic' if is_state('input_select.led_panel_clock_style', 'classic') else 'flip' }}"
+          tint: "{{ [255, 25, 0] if night else none }}"
+          time_color: "{{ [120, 230, 140] if cheap else [255, 150, 110] }}"
+          line1: "{{ now().strftime('%a') | upper }} {{ now().day }}"
+          line1_color: [255, 190, 110]
+          line2: "{{ now().strftime('%b') | upper }}"
+          line2_color: [200, 200, 200]
+          brightness: >-
+            {%- if night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_panel_day_brightness') | int(60) }}
+            {%- endif -%}
+
+  led_wide_readings:
+    alias: LED panel 2 - outdoor readings
+    mode: queued
+    max: 2
+    sequence:
+      - variables:
+          night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
+      - action: bk_light_panel.show_readings
+        data:
+          panel: LED_BLE_XXXXXXXX
+          temperature: "{{ states('sensor.smogomierz_temperature') }}"
+          humidity: "{{ states('sensor.smogomierz_humidity') }}"
+          pm25: "{{ states('sensor.smogomierz_pm2_5') }}"
+          pressure: "{{ states('sensor.smogomierz_pressure_sea_level') }}"
+          tint: "{{ [255, 25, 0] if night else none }}"
+          brightness: >-
+            {%- if night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_panel_day_brightness') | int(60) }}
+            {%- endif -%}
+
+automation:
+  - id: led_wide_scheduler
+    alias: LED panel 2 - scheduler
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: time_pattern
+        seconds: "/5"
+      - trigger: state
+        entity_id:
+          - input_boolean.led_wide_screen_off
+          - binary_sensor.led_panel_night
+          - input_number.led_panel_day_brightness
+          - input_number.led_panel_night_brightness
+        id: now
+    actions:
+      - variables:
+          second: "{{ now().second }}"
+          minute_tick: "{{ trigger.id == 'now' or second < 5 }}"
+      - choose:
+          - conditions: "{{ is_state('input_boolean.led_wide_screen_off', 'on') }}"
+            sequence:
+              - if: "{{ minute_tick }}"
+                then:
+                  - action: bk_light_panel.clear
+                    continue_on_error: true
+                    data:
+                      panel: LED_BLE_XXXXXXXX
+          # the clock at the full minute (flips) and back again at :40
+          - conditions: "{{ minute_tick or 40 <= second < 45 }}"
+            sequence:
+              - action: script.led_wide_clock
+                continue_on_error: true
+          - conditions: "{{ 20 <= second < 25 }}"
+            sequence:
+              - action: script.led_wide_readings
+                continue_on_error: true
+

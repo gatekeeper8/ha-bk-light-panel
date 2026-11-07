@@ -454,3 +454,14 @@ def test_wide_captions_fit():
         for name in ("moon", "heating", "spring", "summer", "autumn", "winter"):
             caption = wide.auto_caption(name, lang)
             assert caption and render.text_width(caption) <= 46, (lang, caption)
+
+
+def test_readings_both_sizes():
+    readings = _load("readings")
+    values = {"temperature": -12.3, "humidity": 81.0, "pm25": 88.0, "pressure": None}
+    for size in ((64, 16), (32, 32)):
+        image = readings.render_readings(values, size)
+        assert image.size == size and image.getbbox() is not None
+    assert readings.text_for("temperature", 6.14) == "6.1°"
+    assert readings.text_for("temperature", -12.3) == "-12°"
+    assert readings.color_for("pm25", 88) == (255, 30, 30)

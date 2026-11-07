@@ -51,6 +51,7 @@ from .aircraft import pick_nearest, render_aircraft
 from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_at, render_aurora, summary
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .panel import BkLightPanel
+from .readings import ORDER as READING_KINDS, render_readings
 from .wide import (
     is_wide,
     render_aircraft_wide,
@@ -152,6 +153,14 @@ SHOW_AURORA_SCHEMA = vol.Schema(
         vol.Optional("show", default=True): cv.boolean,
         vol.Optional(ATTR_DURATION, default=8): vol.All(vol.Coerce(float), vol.Range(0, 60)),
         vol.Optional("frame_interval", default=1.5): vol.All(vol.Coerce(float), vol.Range(0, 10)),
+        vol.Optional("tint"): vol.Any(None, COLOR),
+    }
+)
+SHOW_READINGS_SCHEMA = vol.Schema(
+    {
+        **BASE,
+        # numbers (or unavailable / unknown, shown as --)
+        **{vol.Optional(kind): vol.Any(None, cv.string, vol.Coerce(float)) for kind in READING_KINDS},
         vol.Optional("tint"): vol.Any(None, COLOR),
     }
 )
@@ -408,6 +417,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
         return {"shown": True, **info}
 
+    async def show_readings(call: ServiceCall) -> None:
+        """Temperature, humidity, PM2.5, PM10, pressure with icons (max four)."""
+        panel = _panel_for(hass, call)
+        size = await panel.async_get_size()
+        values: dict[str, float | None] = {}
+        for kind in READING_KINDS:
+            if kind not in call.data:
+                continue
+            try:
+                values[kind] = float(call.data[kind])
+            except (TypeError, ValueError):
+                values[kind] = None
+        if not values:
+            raise ServiceValidationError("Give at least one reading, e.g. temperature: 9.6")
+        png = await hass.async_add_executor_job(
+            lambda: to_png(apply_tint(render_readings(values, size), call.data.get("tint")),
+                           call.data[ATTR_BRIGHTNESS])
+        )
+        await panel.async_send_png(png)
+
+    hass.services.async_register(DOMAIN, "show_readings", show_readings, SHOW_READINGS_SCHEMA)
     hass.services.async_register(
         DOMAIN, "show_aurora", show_aurora, SHOW_AURORA_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
