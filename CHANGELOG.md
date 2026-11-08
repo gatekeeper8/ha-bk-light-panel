@@ -1,6 +1,9 @@
 # Changelog
 
 ## 0.9.0
+- Pictures are sent in pieces of at most 244 bytes (one radio packet) instead of
+  514: far fewer dropped connections through ESPHome Bluetooth proxies, especially
+  with two panels on one proxy.
 - Wide 64×16 panels (Action ACT1025 / ACT1033): the size is read from the panel's
   handshake and every action picks a matching layout: flip or classic clock with the
   text lines beside it, pictures with the caption beside them, a flight-board line for

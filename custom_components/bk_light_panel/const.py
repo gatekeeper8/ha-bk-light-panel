@@ -39,3 +39,9 @@ ATTR_ICON = "icon"
 ATTR_CAPTION = "caption"
 ATTR_CAPTION_COLOR = "caption_color"
 ATTR_DURATION = "duration"
+
+# Largest piece of a picture per Bluetooth write. 244 bytes fit in one
+# radio packet (data length extension): short writes get through an ESP32
+# proxy that shares its radio with Wi-Fi and other connections far more
+# reliably than full 514-byte (MTU 517) writes, which kept breaking links.
+MAX_PIECE_BYTES = 244

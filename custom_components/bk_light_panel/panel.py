@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 
-from .const import IDLE_DISCONNECT_SECONDS, RECOVER_DELAYS
+from .const import IDLE_DISCONNECT_SECONDS, MAX_PIECE_BYTES, RECOVER_DELAYS
 from .protocol import PanelSession
 
 _LOGGER = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ class BkLightPanel:
         )
         mtu = getattr(self._client, "mtu_size", 23) or 23
         _LOGGER.debug("Connected to %s in %.1f s, MTU %s", self.name, time.monotonic() - started, mtu)
-        self._session = PanelSession(self._client, max_write=mtu - 3)
+        self._session = PanelSession(self._client, max_write=min(mtu - 3, MAX_PIECE_BYTES))
         await self._session.start()
 
     @callback

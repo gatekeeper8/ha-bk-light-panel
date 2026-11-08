@@ -509,3 +509,24 @@ def test_wide_boards():
     images += [boards.render_retro(name, f) for name in boards.RETRO for f in (0, 7, 15)]
     assert all(image.size == (64, 16) for image in images)
     assert boards.comfort_color(22) == (110, 235, 140)
+
+
+def test_frame_in_small_pieces():
+    """244-byte pieces: the frame arrives whole, in more writes."""
+    async def run():
+        fake = FakePanel()
+        session = protocol.PanelSession(fake, max_write=244)
+        protocol.STEP_DELAY, saved = 0, protocol.STEP_DELAY
+        try:
+            await session.start()
+            png = render.to_png(render.render_text("HELLO WORLD 123"), 100)
+            fake.writes.clear()
+            await session.send_png(png)
+        finally:
+            protocol.STEP_DELAY = saved
+        return fake, png
+
+    fake, png = asyncio.run(run())
+    pieces = [w for w, response in fake.writes if response]
+    assert all(len(p) <= 244 for p in pieces)
+    assert png in b"".join(pieces)
