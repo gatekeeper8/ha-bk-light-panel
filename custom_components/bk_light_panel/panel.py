@@ -21,7 +21,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 
 from .const import IDLE_DISCONNECT_SECONDS, MAX_PIECE_BYTES, RECOVER_DELAYS
-from .protocol import PanelSession
+from .protocol import FrameNotConfirmed, PanelSession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +47,8 @@ class BkLightPanel:
         self._closing = False
         self._shutting_down = False
         self._recover_task: asyncio.Task | None = None
+        # per-piece receipts; switched on only if the panel misses pictures without
+        self._acknowledged_writes = False
         # what kind of screen is shown ("clock", "readings"; None = anything else)
         self.last_screen: str | None = None
         # (width, height), known after the first handshake
@@ -94,6 +96,12 @@ class BkLightPanel:
                         return
                     except (BleakError, TimeoutError, EOFError, OSError) as err:
                         _LOGGER.debug("Send to %s failed (attempt %s): %s", self.name, attempt, err)
+                        if isinstance(err, FrameNotConfirmed) and not self._acknowledged_writes:
+                            _LOGGER.warning(
+                                "%s did not confirm a picture sent without receipts; "
+                                "using acknowledged writes from now on", self.name,
+                            )
+                            self._acknowledged_writes = True
                         self._last_png = None  # screen content unknown now
                         await self._disconnect()
                         if attempt == 2:
@@ -127,7 +135,9 @@ class BkLightPanel:
         )
         mtu = getattr(self._client, "mtu_size", 23) or 23
         _LOGGER.debug("Connected to %s in %.1f s, MTU %s", self.name, time.monotonic() - started, mtu)
-        self._session = PanelSession(self._client, max_write=min(mtu - 3, MAX_PIECE_BYTES))
+        self._session = PanelSession(
+            self._client, max_write=min(mtu - 3, MAX_PIECE_BYTES), acknowledged=self._acknowledged_writes
+        )
         await self._session.start()
 
     @callback

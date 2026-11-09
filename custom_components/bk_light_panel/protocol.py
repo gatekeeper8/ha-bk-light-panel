@@ -68,12 +68,24 @@ def is_ack_frame(payload: bytes) -> bool:
     return payload == b"\x05\x00\x02\x00\x03"
 
 
+class FrameNotConfirmed(TimeoutError):
+    """The panel did not confirm a picture (05 00 02 00 03) in time."""
+
+
+# pause between unacknowledged pieces, so a proxy's queue is not flooded
+PIECE_GAP = 0.01
+
+
 class PanelSession:
     """One connected panel: handshake once, then send frames."""
 
-    def __init__(self, client: Any, max_write: int = 509) -> None:
+    def __init__(self, client: Any, max_write: int = 509, acknowledged: bool = False) -> None:
         self._client = client
         self._max_write = max_write
+        # False: pieces go out as write commands (no per-piece receipt); the
+        # panel confirms the whole picture anyway. Faster, and avoids GATT
+        # write-request timeouts (error 133) seen through ESPHome proxies.
+        self.acknowledged = acknowledged
         self._primed = False
         # (width, height) from the first handshake answer: 0C = 32x32, 0B = 64x16
         self.size: tuple[int, int] | None = None
@@ -125,15 +137,21 @@ class PanelSession:
         frame = build_frame(png_bytes)
         self._frame_ack.clear()
         started = time.monotonic()
-        # acknowledged writes, split to fit the link's MTU
+        # split to fit the link's MTU (and one radio packet)
         pieces = chunk(frame, self._max_write)
-        for piece in pieces:
-            await self._write(piece, response=True)
+        for i, piece in enumerate(pieces):
+            await self._write(piece, response=self.acknowledged)
+            if not self.acknowledged and i < len(pieces) - 1:
+                await asyncio.sleep(PIECE_GAP)
         written = time.monotonic()
-        await asyncio.wait_for(self._frame_ack.wait(), ACK_TIMEOUT)
+        try:
+            await asyncio.wait_for(self._frame_ack.wait(), ACK_TIMEOUT)
+        except TimeoutError as err:
+            raise FrameNotConfirmed("panel did not confirm the picture") from err
         _LOGGER.debug(
-            "Frame %d bytes in %d pieces of max %d: writing %.2f s, panel answer %.2f s",
+            "Frame %d bytes in %d pieces of max %d (%s): writing %.2f s, panel answer %.2f s",
             len(frame), len(pieces), self._max_write,
+            "acknowledged" if self.acknowledged else "write commands",
             written - started, time.monotonic() - written,
         )
         self._frames_since_validation += 1

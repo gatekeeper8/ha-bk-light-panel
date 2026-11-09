@@ -129,8 +129,21 @@ def test_session_handshake_and_chunked_frame():
     assert len(handshakes) == 1
     assert fake.frame == protocol.build_frame(png)
     frame_writes = [(w, r) for w, r in fake.writes if w not in (protocol.HANDSHAKE_FIRST, protocol.HANDSHAKE_SECOND)]
-    assert all(r is True for _, r in frame_writes)
+    assert all(r is False for _, r in frame_writes)  # write commands by default
     assert all(len(w) <= 64 for w, _ in frame_writes)
+
+
+def test_acknowledged_writes_when_asked():
+    async def run():
+        fake = FakePanel()
+        session = protocol.PanelSession(fake, max_write=64, acknowledged=True)
+        await session.start()
+        await session.send_png(render.to_png(render.render_fill([9, 9, 9])))
+        return fake
+
+    fake = asyncio.run(run())
+    frame_writes = [r for w, r in fake.writes if w not in (protocol.HANDSHAKE_FIRST, protocol.HANDSHAKE_SECOND)]
+    assert frame_writes and all(frame_writes)
 
 
 def test_session_tolerates_missing_second_ack():
@@ -527,6 +540,32 @@ def test_frame_in_small_pieces():
         return fake, png
 
     fake, png = asyncio.run(run())
-    pieces = [w for w, response in fake.writes if response]
+    pieces = [w for w, _ in fake.writes]
+    assert not any(response for _, response in fake.writes)  # write commands by default
     assert all(len(p) <= 244 for p in pieces)
     assert png in b"".join(pieces)
+
+
+def test_unconfirmed_picture_raises():
+    """No 05 00 02 00 03 after the pieces: FrameNotConfirmed (panel then falls back)."""
+    class Silent(FakePanel):
+        def _notify(self, text):
+            if not text.startswith("05"):
+                super()._notify(text)
+
+    async def run():
+        session = protocol.PanelSession(Silent(), max_write=244)
+        saved = protocol.STEP_DELAY, protocol.ACK_TIMEOUT
+        protocol.STEP_DELAY, protocol.ACK_TIMEOUT = 0, 0.2
+        try:
+            await session.start()
+            await session.send_png(render.to_png(render.render_fill([1, 2, 3])))
+        finally:
+            protocol.STEP_DELAY, protocol.ACK_TIMEOUT = saved
+
+    try:
+        asyncio.run(run())
+    except protocol.FrameNotConfirmed:
+        pass
+    else:
+        raise AssertionError("expected FrameNotConfirmed")
