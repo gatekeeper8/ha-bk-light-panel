@@ -45,3 +45,9 @@ ATTR_DURATION = "duration"
 # proxy that shares its radio with Wi-Fi and other connections far more
 # reliably than full 514-byte (MTU 517) writes, which kept breaking links.
 MAX_PIECE_BYTES = 244
+
+# Pictures go out without per-piece receipts. A missed picture is sent again;
+# only this many misses in a row switch a panel to acknowledged writes, and
+# only for this long before the faster mode is tried again.
+UNCONFIRMED_LIMIT = 3
+ACKNOWLEDGED_MINUTES = 30

@@ -20,7 +20,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 
-from .const import IDLE_DISCONNECT_SECONDS, MAX_PIECE_BYTES, RECOVER_DELAYS
+from .const import (
+    ACKNOWLEDGED_MINUTES,
+    IDLE_DISCONNECT_SECONDS,
+    MAX_PIECE_BYTES,
+    RECOVER_DELAYS,
+    UNCONFIRMED_LIMIT,
+)
 from .protocol import FrameNotConfirmed, PanelSession
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,6 +55,8 @@ class BkLightPanel:
         self._recover_task: asyncio.Task | None = None
         # per-piece receipts; switched on only if the panel misses pictures without
         self._acknowledged_writes = False
+        self._unconfirmed_in_row = 0  # pictures missed in a row without receipts
+        self._acknowledged_since = 0.0
         # what kind of screen is shown ("clock", "readings"; None = anything else)
         self.last_screen: str | None = None
         # (width, height), known after the first handshake
@@ -93,15 +101,21 @@ class BkLightPanel:
                         assert self._session is not None
                         await self._session.send_png(png)
                         self._last_png = self._wanted_png = png
+                        self._unconfirmed_in_row = 0
                         return
                     except (BleakError, TimeoutError, EOFError, OSError) as err:
                         _LOGGER.debug("Send to %s failed (attempt %s): %s", self.name, attempt, err)
                         if isinstance(err, FrameNotConfirmed) and not self._acknowledged_writes:
-                            _LOGGER.warning(
-                                "%s did not confirm a picture sent without receipts; "
-                                "using acknowledged writes from now on", self.name,
-                            )
-                            self._acknowledged_writes = True
+                            self._unconfirmed_in_row += 1
+                            if self._unconfirmed_in_row >= UNCONFIRMED_LIMIT:
+                                _LOGGER.warning(
+                                    "%s missed %d pictures in a row sent without receipts; "
+                                    "using acknowledged writes for %d minutes",
+                                    self.name, self._unconfirmed_in_row, ACKNOWLEDGED_MINUTES,
+                                )
+                                self._acknowledged_writes = True
+                                self._acknowledged_since = time.monotonic()
+                                self._unconfirmed_in_row = 0
                         self._last_png = None  # screen content unknown now
                         await self._disconnect()
                         if attempt == 2:
@@ -133,6 +147,9 @@ class BkLightPanel:
             disconnected_callback=self._on_disconnected,
             max_attempts=3,
         )
+        if self._acknowledged_writes and time.monotonic() - self._acknowledged_since > ACKNOWLEDGED_MINUTES * 60:
+            _LOGGER.debug("%s: trying writes without receipts again", self.name)
+            self._acknowledged_writes = False
         mtu = getattr(self._client, "mtu_size", 23) or 23
         _LOGGER.debug("Connected to %s in %.1f s, MTU %s", self.name, time.monotonic() - started, mtu)
         self._session = PanelSession(

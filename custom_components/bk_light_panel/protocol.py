@@ -73,7 +73,7 @@ class FrameNotConfirmed(TimeoutError):
 
 
 # pause between unacknowledged pieces, so a proxy's queue is not flooded
-PIECE_GAP = 0.01
+PIECE_GAP = 0.02
 
 
 class PanelSession:

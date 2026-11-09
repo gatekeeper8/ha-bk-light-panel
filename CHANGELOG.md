@@ -6,8 +6,8 @@
   with two panels on one proxy.
 - Picture pieces are sent as write commands without a per-piece receipt (the panel
   confirms each whole picture). This avoids the write-request timeouts (GATT error
-  133) right after a reconnect and makes animations faster. If a panel ever misses
-  a picture, the integration switches back to acknowledged writes and logs a warning.
+  133) right after a reconnect and makes animations faster. A missed picture is sent
+  again; only 3 misses in a row switch a panel to acknowledged writes, for 30 minutes.
 - Wide 64×16 panels (Action ACT1025 / ACT1033): the size is read from the panel's
   handshake and every action picks a matching layout: flip or classic clock with the
   text lines beside it, pictures with the caption beside them, a flight-board line for
