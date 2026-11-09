@@ -587,3 +587,17 @@ def test_forecast_and_date_clock():
     assert clock.size == (64, 16)
     assert clock.crop((0, 11, 32, 16)).getbbox() is not None  # the date line
     assert forecast.DAY_NAMES["pl"][2] == "ŚR"
+
+
+def test_date_clock_rows_line_up():
+    """Left (time, date) and right (temperature, PM) use the same rows and sizes."""
+    _load_all()
+    wide = sys.modules["bkpkg.wide"]
+    img = wide.render_clock_wide("18:52", line1="-12.3°", line2="PM 112", date_text="ŚR 11.11",
+                                 time_color=[255, 255, 255])
+    px = img.load()
+
+    def rows(x0, x1):
+        return [y for y in range(16) if any(max(px[x, y]) > 100 for x in range(x0, x1))]
+
+    assert rows(2, 30) == rows(33, 64) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]

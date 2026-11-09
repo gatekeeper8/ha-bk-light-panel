@@ -22,7 +22,8 @@
 - New `show_forecast` for both sizes: the weather in a few hours and tomorrow, each
   with its picture, hour or weekday (en / pl) and temperature.
 - `show_clock` `date_text`: on 64×16 the clock moves up into a shorter band with a
-  date line under it.
+  date line under it; line 1 is drawn in the clock's own digits level with the time,
+  line 2 in the date's font level with the date.
 - New 64×16 screens: `show_sky_graph` (24 h temperature from history and the hourly
   forecast, day warm with a sun, night blue with stars), `show_room` (a room's
   temperature and humidity or set point, with a steaming pot), `show_traffic` (network download / upload of the last

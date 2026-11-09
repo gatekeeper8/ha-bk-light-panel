@@ -90,7 +90,7 @@ script:
           tint: "{{ [255, 25, 0] if night else none }}"
           time_color: "{{ [120, 230, 140] if cheap else [255, 150, 110] }}"
           # day and date in Polish under the clock
-          date_text: "{{ ['PON', 'WT', 'ŚR', 'CZW', 'PT', 'SOB', 'NDZ'][now().weekday()] }} {{ now().day }}.{{ now().month }}"
+          date_text: "{{ ['PN', 'WT', 'ŚR', 'CZ', 'PT', 'SO', 'ND'][now().weekday()] }} {{ now().day }}.{{ now().month }}"
           date_color: [255, 190, 110]
           # outdoor temperature and PM2.5 on the right, coloured by level
           line1: "{{ (t | float | round(1) ~ '°') if is_number(t) else '--°' }}"
