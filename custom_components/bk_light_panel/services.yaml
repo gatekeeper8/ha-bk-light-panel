@@ -165,6 +165,13 @@ show_icon:
 
 show_clock:
   fields:
+    date_text:
+      example: "PON 9.11"
+      selector:
+        text:
+    date_color:
+      selector:
+        color_rgb:
     transition:
       default: none
       selector:
@@ -603,6 +610,55 @@ show_traffic:
           step: any
           mode: box
           unit_of_measurement: Mbit/s
+    duration:
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: s
+    frame_interval:
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          unit_of_measurement: s
+    tint:
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+show_forecast:
+  fields:
+    weather:
+      required: true
+      selector:
+        entity:
+          domain: weather
+    hours_ahead:
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 24
+          unit_of_measurement: h
+    language:
+      selector:
+        select:
+          options:
+            - en
+            - pl
     duration:
       default: 10
       selector:

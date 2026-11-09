@@ -569,3 +569,21 @@ def test_unconfirmed_picture_raises():
         pass
     else:
         raise AssertionError("expected FrameNotConfirmed")
+
+
+def test_forecast_and_date_clock():
+    _load_all()
+    forecast = _load("forecast")
+    wide = sys.modules["bkpkg.wide"]
+    points = [{"condition": "rainy", "label": "10H", "temperature": 6.4},
+              {"condition": "partlycloudy", "label": "ŚR", "temperature": -12}]
+    for size in ((64, 16), (32, 32)):
+        image = forecast.render_forecast(points, size, 1)
+        assert image.size == size
+    # the second temperature on 32x32 sits low (y 24..30) and must be drawn
+    square = forecast.render_forecast(points, (32, 32))
+    assert square.crop((16, 24, 32, 31)).getbbox() is not None
+    clock = wide.render_clock_wide("07:24", line1="6.4°", line2="PM 27", date_text="PON 9.11")
+    assert clock.size == (64, 16)
+    assert clock.crop((0, 11, 32, 16)).getbbox() is not None  # the date line
+    assert forecast.DAY_NAMES["pl"][2] == "ŚR"

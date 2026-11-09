@@ -64,6 +64,7 @@ from .boards import (
 )
 from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_at, render_aurora, summary
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
+from .forecast import DAY_NAMES, render_forecast
 from .panel import BkLightPanel
 from .readings import ORDER as READING_KINDS, render_readings
 from .wide import (
@@ -146,6 +147,9 @@ SHOW_CLOCK_SCHEMA = vol.Schema(
         vol.Optional("animate", default=True): cv.boolean,
         vol.Optional("tint"): vol.Any(None, COLOR),
         vol.Optional("transition", default="none"): TRANSITION,
+        # 64x16: a date line under a shorter clock
+        vol.Optional("date_text", default=""): cv.string,
+        vol.Optional("date_color"): COLOR,
     }
 )
 SHOW_AIRCRAFT_SCHEMA = vol.Schema(
@@ -200,6 +204,12 @@ SHOW_ROOM_SCHEMA = vol.Schema(
      vol.Optional("temperature"): vol.Any(None, cv.string, vol.Coerce(float)),
      vol.Optional("humidity"): vol.Any(None, cv.string, vol.Coerce(float)),
      vol.Optional("target"): vol.Any(None, cv.string, vol.Coerce(float))}
+)
+SHOW_FORECAST_SCHEMA = vol.Schema(
+    {**BASE, **ANIMATION,
+     vol.Required("weather"): cv.entity_id,
+     vol.Optional("hours_ahead", default=3): vol.All(vol.Coerce(int), vol.Range(1, 24)),
+     vol.Optional("language"): vol.Any(None, cv.string)}
 )
 SHOW_SKY_SCHEMA = vol.Schema(
     {**BASE, **ANIMATION,
@@ -382,7 +392,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     lambda st=step: to_png(
                         apply_tint(
                             render_clock_wide(time_text, previous, st, data["style"],
-                                              data.get("time_color"), *extras),
+                                              data.get("time_color"), *extras,
+                                              date_text=data["date_text"],
+                                              date_color=data.get("date_color")),
                             data.get("tint"),
                         ),
                         data[ATTR_BRIGHTNESS],
@@ -620,6 +632,45 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
         await _play(call, panel, lambda f: render_sky_graph(temps, daylight, now_col, f))
 
+    async def _forecasts(entity_id: str, kind: str) -> list[dict]:
+        try:
+            reply = await hass.services.async_call(
+                "weather", "get_forecasts", {"entity_id": entity_id, "type": kind},
+                blocking=True, return_response=True,
+            )
+        except HomeAssistantError as err:
+            _LOGGER.debug("No %s forecast from %s: %s", kind, entity_id, err)
+            return []
+        return (reply or {}).get(entity_id, {}).get("forecast", [])
+
+    async def show_forecast(call: ServiceCall) -> None:
+        """In a few hours and tomorrow: picture, label, temperature (both panel sizes)."""
+        panel = _panel_for(hass, call)
+        size = await panel.async_get_size()
+        entity = call.data["weather"]
+        lang = language_for(call.data.get("language") or hass.config.language)
+        now = dt_util.now()
+        is_day = _is_day_factory()
+        points: list[dict] = []
+        target = now + timedelta(hours=call.data["hours_ahead"])
+        hourly = [(dt_util.parse_datetime(str(f.get("datetime", ""))), f) for f in await _forecasts(entity, "hourly")]
+        hourly = [(t, f) for t, f in hourly if t and t >= now]
+        if hourly:
+            t, f = min(hourly, key=lambda tf: abs((tf[0] - target).total_seconds()))
+            local = dt_util.as_local(t)
+            points.append({"condition": f.get("condition"), "temperature": _number(f.get("temperature")),
+                           "label": f"{local.hour}H", "night": not is_day(t)})
+        tomorrow = (now + timedelta(days=1)).date()
+        for f in await _forecasts(entity, "daily"):
+            t = dt_util.parse_datetime(str(f.get("datetime", "")))
+            if t and dt_util.as_local(t).date() == tomorrow:
+                points.append({"condition": f.get("condition"), "temperature": _number(f.get("temperature")),
+                               "label": DAY_NAMES[lang][tomorrow.weekday()], "night": False})
+                break
+        if not points:
+            raise HomeAssistantError(f"No forecast from {entity}")
+        await _play(call, panel, lambda f: render_forecast(points, size, f))
+
     async def show_traffic(call: ServiceCall) -> None:
         """Network traffic of the last minutes: download up, upload down, live rates."""
         panel = await _wide_panel(call)
@@ -649,6 +700,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             up = [0.0] * len(down)
         await _play(call, panel, lambda f: render_traffic(down, up, f, call.data.get("max_rate")))
 
+    hass.services.async_register(DOMAIN, "show_forecast", show_forecast, SHOW_FORECAST_SCHEMA)
     hass.services.async_register(DOMAIN, "show_retro", show_retro, SHOW_RETRO_SCHEMA)
     hass.services.async_register(DOMAIN, "show_room", show_room, SHOW_ROOM_SCHEMA)
     hass.services.async_register(DOMAIN, "show_sky_graph", show_sky_graph, SHOW_SKY_SCHEMA)

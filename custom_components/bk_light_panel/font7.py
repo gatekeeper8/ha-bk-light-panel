@@ -85,13 +85,13 @@ def width(text: str) -> int:
     return sum(len((glyph(c) or GLYPHS["?"])[0]) for c in text) + GAP * (len(text) - 1)
 
 
-def draw(pixels, text: str, x: int, y: int, color, clip: tuple[int, int] = (0, 64)) -> int:
+def draw(pixels, text: str, x: int, y: int, color, clip: tuple[int, int] = (0, 64), height: int = 16) -> int:
     """Draw at (x, y); returns the x after the text."""
     for char in text:
         rows = glyph(char) or GLYPHS["?"]
         for ry, row in enumerate(rows):
             for rx, pixel in enumerate(row):
-                if pixel == "#" and clip[0] <= x + rx < clip[1] and 0 <= y + ry < 16:
+                if pixel == "#" and clip[0] <= x + rx < clip[1] and 0 <= y + ry < height:
                     pixels[x + rx, y + ry] = color
         x += len(rows[0]) + GAP
     return x

@@ -35,6 +35,11 @@ WIDTH, HEIGHT = 64, 16
 # 15 wide: pin, 1 free, 11 digits, 1 free, pin - the same on both sides
 FLIP_CARDS = {"cards": ((0, 15), (16, 31)), "top": 2, "bottom": 14, "hinge": 8,
               "digit_top": 4, "radius": 2.6, "centred": True}
+# a shorter clock band at the top, with a date line under it
+DATE_CARDS = {"cards": ((0, 15), (16, 31)), "top": 0, "bottom": 9, "hinge": 4,
+              "digit_top": 1, "radius": 2.0, "centred": True,
+              "split_shade": 0.85}  # 7-pixel digits: keep the split faint
+_FOLD = str.maketrans("ĄĆĘŁŃÓŚŹŻąćęłńóśźż", "ACELNOSZZACELNOSZZ")
 SIZE = (WIDTH, HEIGHT)
 RGB = tuple[int, int, int]
 
@@ -62,6 +67,7 @@ def _blank() -> Image.Image:
 
 def _text(pixels, text: str, x0: int, x1: int, y: int, color: RGB) -> None:
     """Small 3x5 text centred between x0 and x1 (clipped to the panel)."""
+    text = text.translate(_FOLD)
     x = x0 + (x1 - x0 - text_width(text)) // 2
     for char in text:
         rows = _glyph(char)
@@ -114,10 +120,23 @@ def render_clock_wide(
     line2_color: list[int] | None = None,
     bar_value: float | None = None,
     bar_max: float = 75.0,
+    date_text: str = "",
+    date_color: list[int] | None = None,
 ) -> Image.Image:
-    """Clock on the left half, the two lines and the level bar on the right."""
+    """Clock on the left half, the two lines and the level bar on the right.
+
+    date_text: the clock moves up into a shorter band, the date goes under it.
+    """
     image = _blank()
-    if style == "flip":
+    if date_text:
+        if style == "flip":
+            face = render_flip_clock(time_text, previous, step, time_color, geometry=DATE_CARDS)
+            image.paste(face.crop((0, 0, 32, 10)), (0, 0))
+        else:
+            face = render_clock(time_text, time_color)
+            image.paste(face.crop((0, 1, 32, 10)), (0, 0))  # digits at y 1..7
+        _text(image.load(), date_text, 0, 32, 11, _color(date_color, (255, 190, 110)))
+    elif style == "flip":
         face = render_flip_clock(time_text, previous, step, time_color, geometry=FLIP_CARDS)
         image.paste(face.crop((0, 0, 32, 16)), (0, 0))
     else:

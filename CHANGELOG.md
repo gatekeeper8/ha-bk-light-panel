@@ -19,6 +19,10 @@
   only where a text does not fit.
 - `transition: slide` for `show_clock` and `show_readings`: the new screen pushes a
   different one out to the left. 64×16 flip cards are smaller with rounder corners.
+- New `show_forecast` for both sizes: the weather in a few hours and tomorrow, each
+  with its picture, hour or weekday (en / pl) and temperature.
+- `show_clock` `date_text`: on 64×16 the clock moves up into a shorter band with a
+  date line under it.
 - New 64×16 screens: `show_sky_graph` (24 h temperature from history and the hourly
   forecast, day warm with a sun, night blue with stars), `show_room` (a room's
   temperature and humidity or set point, with a steaming pot), `show_traffic` (network download / upload of the last

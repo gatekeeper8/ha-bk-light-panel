@@ -103,6 +103,7 @@ or address.
 | `bk_light_panel.show_nearest_aircraft` | Closest plane from your ADS-B `aircraft.json` (`url`, `max_distance`); returns the plane's data |
 | `bk_light_panel.show_aurora` | NOAA Kp forecast for the next 24 h; `min_kp`, `show: false` = only return the data |
 | `bk_light_panel.show_readings` | Up to four readings with icons, coloured by level: `temperature`, `humidity`, `pm25`, `pm10`, `pressure` |
+| `bk_light_panel.show_forecast` | Weather in a few hours and tomorrow: picture, hour / weekday, temperature |
 | `bk_light_panel.show_sky_graph` | 64×16: 24 h of temperature (history + hourly forecast), day and night marked |
 | `bk_light_panel.show_room` | 64×16: a room's name, temperature and humidity |
 | `bk_light_panel.show_traffic` | 64×16: network download / upload of the last minutes, from data-rate sensors |

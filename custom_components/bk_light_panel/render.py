@@ -319,6 +319,7 @@ def _flip_face(
     digit_top: int = DIGIT_TOP,
     radius: float = 1.2,
     centred: bool = False,
+    split_shade: float = 0.5,
 ) -> Image.Image:
     """Two split-flap cards with the digits, no animation.
 
@@ -345,7 +346,7 @@ def _flip_face(
                 y = digit_top + ry
                 shade = 1.0 if y < hinge else 0.86
                 if y == hinge:
-                    shade = 0.5  # the split runs through the middle
+                    shade = split_shade  # the split runs through the middle
                 for rx, pixel in enumerate(row):
                     if pixel == "#":
                         pixels[x + rx, y] = _scaled((245, 238, 222), shade)

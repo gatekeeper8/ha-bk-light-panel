@@ -215,6 +215,14 @@
         "transition": {
           "name": "Transition",
           "description": "slide = the new screen pushes a different one out to the left (e.g. clock after readings)."
+        },
+        "date_text": {
+          "name": "Date line",
+          "description": "64x16 panels: the clock moves up and this line goes under it, e.g. PON 9.11."
+        },
+        "date_color": {
+          "name": "Date colour",
+          "description": "Colour of the date line."
         }
       }
     },
@@ -485,6 +493,44 @@
         "max_rate": {
           "name": "Top of the graph",
           "description": "Mbit/s; empty = the highest value shown."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_forecast": {
+      "name": "Show forecast",
+      "description": "Weather in a few hours and tomorrow: picture, hour or weekday, temperature (side by side on 64x16, stacked on 32x32).",
+      "fields": {
+        "weather": {
+          "name": "Weather",
+          "description": "Weather entity with hourly and daily forecasts."
+        },
+        "hours_ahead": {
+          "name": "Hours ahead",
+          "description": "The first point: this many hours from now."
+        },
+        "language": {
+          "name": "Language",
+          "description": "Weekday names: en or pl (default: Home Assistant's language)."
         },
         "duration": {
           "name": "Show for",
