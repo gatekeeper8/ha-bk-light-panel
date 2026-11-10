@@ -4,10 +4,9 @@
 - Pictures are sent in pieces of at most 244 bytes (one radio packet) instead of
   514: far fewer dropped connections through ESPHome Bluetooth proxies, especially
   with two panels on one proxy.
-- Picture pieces are sent as write commands without a per-piece receipt (the panel
-  confirms each whole picture). This avoids the write-request timeouts (GATT error
-  133) right after a reconnect and makes animations faster. A missed picture is sent
-  again; only 3 misses in a row switch a panel to acknowledged writes, for 30 minutes.
+- Picture pieces stay acknowledged writes. A faster mode without per-piece receipts
+  exists (`FAST_WRITES` in `const.py`) but is off: through an ESPHome proxy the
+  panels missed pictures and every miss cost a reconnect.
 - Wide 64×16 panels (Action ACT1025 / ACT1033): the size is read from the panel's
   handshake and every action picks a matching layout: flip or classic clock with the
   text lines beside it, pictures with the caption beside them, a flight-board line for

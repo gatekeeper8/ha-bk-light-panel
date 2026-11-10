@@ -46,8 +46,11 @@ ATTR_DURATION = "duration"
 # reliably than full 514-byte (MTU 517) writes, which kept breaking links.
 MAX_PIECE_BYTES = 244
 
-# Pictures go out without per-piece receipts. A missed picture is sent again;
-# only this many misses in a row switch a panel to acknowledged writes, and
-# only for this long before the faster mode is tried again.
+# Picture pieces go out as acknowledged writes (each piece confirmed). The
+# faster mode without receipts (FAST_WRITES = True) made the panels miss
+# pictures through an ESPHome proxy - every miss costs a reconnect, and a day
+# of it meant ~2000 drops instead of a few dozen - so it is off.
+FAST_WRITES = False
+# fast mode only: misses in a row before falling back, and for how long
 UNCONFIRMED_LIMIT = 3
 ACKNOWLEDGED_MINUTES = 30

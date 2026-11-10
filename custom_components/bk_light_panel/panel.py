@@ -22,6 +22,7 @@ from homeassistant.helpers.event import async_call_later
 
 from .const import (
     ACKNOWLEDGED_MINUTES,
+    FAST_WRITES,
     IDLE_DISCONNECT_SECONDS,
     MAX_PIECE_BYTES,
     RECOVER_DELAYS,
@@ -54,7 +55,7 @@ class BkLightPanel:
         self._shutting_down = False
         self._recover_task: asyncio.Task | None = None
         # per-piece receipts; switched on only if the panel misses pictures without
-        self._acknowledged_writes = False
+        self._acknowledged_writes = not FAST_WRITES
         self._unconfirmed_in_row = 0  # pictures missed in a row without receipts
         self._acknowledged_since = 0.0
         # what kind of screen is shown ("clock", "readings"; None = anything else)
@@ -147,7 +148,8 @@ class BkLightPanel:
             disconnected_callback=self._on_disconnected,
             max_attempts=3,
         )
-        if self._acknowledged_writes and time.monotonic() - self._acknowledged_since > ACKNOWLEDGED_MINUTES * 60:
+        if (FAST_WRITES and self._acknowledged_writes
+                and time.monotonic() - self._acknowledged_since > ACKNOWLEDGED_MINUTES * 60):
             _LOGGER.debug("%s: trying writes without receipts again", self.name)
             self._acknowledged_writes = False
         mtu = getattr(self._client, "mtu_size", 23) or 23
