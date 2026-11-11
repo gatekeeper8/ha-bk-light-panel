@@ -1,6 +1,15 @@
 # Changelog
 
 ## 0.10.0 (unreleased)
+- **Retro screens from the panel's own memory**: `show_retro` uploads each built-in
+  animation once to its own slot (atari 23 … agent 29), then only switches the
+  playlist, so the panel animates smoothly with no Bluetooth traffic. Uploads are
+  skipped while the slot holds the same GIF (CRC, remembered across restarts; `force:
+  true` uploads again). Brightness is applied with the panel's own brightness, so the
+  GIF never changes. The next live picture (the clock) takes over as before; the
+  playlist and brightness are put back first. If the panel does not confirm a GIF, the
+  screen is streamed live (`mode: live`) and that upload is not retried for 6 hours.
+  `show_retro` now returns what it did (screen, mode, slot, uploaded).
 - Runner animation: the castle ledge is darker, warmer sandstone with mortar lines (it
   showed almost white-pink on the panel).
 

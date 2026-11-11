@@ -28,10 +28,15 @@ from .const import (
     MAX_PIECE_BYTES,
     RECOVER_DELAYS,
     UNCONFIRMED_LIMIT,
+    UPLOAD_RETRY_HOURS,
 )
 from .protocol import FrameNotConfirmed, PanelSession, brightness_command, playlist_command
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class UploadRefused(HomeAssistantError):
+    """The panel did not confirm a stored animation (e.g. too big for it)."""
 
 
 class BkLightPanel:
@@ -60,7 +65,15 @@ class BkLightPanel:
         self._unconfirmed_in_row = 0  # pictures missed in a row without receipts
         self._acknowledged_since = 0.0
         self._stored: dict[int, int] = {}  # slot -> CRC of the GIF stored there
-        self._brightness: int | None = None  # the panel's own brightness, once set
+        # called with the slot -> CRC map after every upload (saved across restarts)
+        self.on_stored_change: Callable[[dict[int, int]], None] | None = None
+        self._failed_uploads: dict[int, float] = {}  # slot -> when the panel refused it
+        self._brightness: int | None = None  # the panel's own brightness now (None = unknown)
+        self._wanted_brightness: int | None = None  # set by set_brightness
+        # stored slots the panel plays now, and the ones it should play whenever no
+        # live picture is shown (also while disconnected); None = unknown / not managed
+        self._playlist: list[int] | None = None
+        self._background: list[int] | None = None
         # what kind of screen is shown ("clock", "readings"; None = anything else)
         self.last_screen: str | None = None
         # (width, height), known after the first handshake
@@ -103,6 +116,7 @@ class BkLightPanel:
                     try:
                         await self._ensure_connected()
                         assert self._session is not None
+                        await self._apply_state(self._session)
                         await self._session.send_png(png)
                         self._last_png = self._wanted_png = png
                         self._unconfirmed_in_row = 0
@@ -148,38 +162,140 @@ class BkLightPanel:
                     if attempt == 2:
                         raise HomeAssistantError(f"{what} on {self.name} failed: {err or type(err).__name__}") from err
 
-    async def async_store_animation(self, gif: bytes, slot: int, play: bool = True) -> bool:
-        """Store a GIF in a slot (skipped if the slot already holds it) and play it.
+    # ------------------------------------------------------ stored animations
+    def load_stored(self, slots: dict) -> None:
+        """What earlier runs stored in the panel's slots (slot -> CRC)."""
+        self._stored = {int(slot): int(crc) for slot, crc in slots.items()}
+
+    def is_stored(self, slot: int, gif: bytes) -> bool:
+        return self._stored.get(slot) == binascii.crc32(gif)
+
+    def upload_refused_recently(self, slot: int) -> bool:
+        """The panel did not confirm this slot's upload within UPLOAD_RETRY_HOURS."""
+        when = self._failed_uploads.get(slot)
+        return when is not None and time.monotonic() - when < UPLOAD_RETRY_HOURS * 3600
+
+    def _remember(self, slot: int, crc: int | None) -> None:
+        if crc is None:
+            self._stored.pop(slot, None)
+        else:
+            self._stored[slot] = crc
+        if self.on_stored_change is not None:
+            self.on_stored_change(dict(self._stored))
+
+    async def _upload(self, session: PanelSession, gif: bytes, slot: int, force: bool) -> bool:
+        """Store a GIF unless the slot already holds exactly it. True if uploaded."""
+        crc = binascii.crc32(gif)
+        if not force and self._stored.get(slot) == crc:
+            return False
+        self._remember(slot, None)  # half-written until the panel confirms
+        try:
+            await session.send_gif(gif, slot)
+        except FrameNotConfirmed as err:
+            # not retried: a GIF the panel cannot take would fail again. Drop the
+            # link so the panel discards the half-received data.
+            self._failed_uploads[slot] = time.monotonic()
+            await self._disconnect()
+            raise UploadRefused(
+                f"{self.name} did not confirm the animation for slot {slot} ({len(gif)} bytes)"
+            ) from err
+        self._failed_uploads.pop(slot, None)
+        self._remember(slot, crc)
+        _LOGGER.debug("%s: stored %d bytes of animation in slot %d", self.name, len(gif), slot)
+        return True
+
+    async def _command(self, session: PanelSession, data: bytes) -> None:
+        """A playlist / brightness command; an unconfirmed one is not retried (no loops)."""
+        try:
+            await session.command(data)
+        except FrameNotConfirmed as err:
+            _LOGGER.debug("%s: %s", self.name, err)
+
+    def _brightness_target(self) -> int | None:
+        """The brightness live pictures want; 100 if only an animation changed it."""
+        if self._wanted_brightness is not None:
+            return self._wanted_brightness
+        return 100 if self._brightness not in (None, 100) else None
+
+    async def _apply_state(self, session: PanelSession) -> None:
+        """Before a live picture: the background playlist and the wanted brightness.
+
+        Usually nothing to do; after a stored animation it switches the playlist
+        back (so a dropped connection shows the background, not the last
+        animation) and undoes the animation's brightness.
+        """
+        if self._background and self._playlist != self._background:
+            await self._command(session, playlist_command(self._background))
+            self._playlist = list(self._background)
+        target = self._brightness_target()
+        if target is not None and self._brightness != target:
+            await self._command(session, brightness_command(target))
+            self._brightness = target
+
+    async def async_play_stored(
+        self, gif: bytes, slot: int, brightness: int = 100, force: bool = False
+    ) -> bool:
+        """Let the panel play a GIF from its own memory; uploads it only if the slot differs.
+
+        brightness: % of the panel brightness live pictures use, applied with the
+        panel's own brightness (the GIF keeps full colour, so it stays the same
+        bytes and is not uploaded again). Undone before the next live picture.
+        Returns True if the GIF was uploaded.
+        """
+        base = self._wanted_brightness if self._wanted_brightness is not None else 100
+        level = max(0, min(100, round(base * brightness / 100)))
+        uploaded = False
+
+        async def run(session: PanelSession) -> None:
+            nonlocal uploaded
+            if level != self._brightness:  # dim first: no bright flash of the animation
+                await self._command(session, brightness_command(level))
+                self._brightness = level
+            # playlist first, then the data, as the phone app does
+            await session.command(playlist_command([slot]))
+            self._playlist = [slot]
+            uploaded = await self._upload(session, gif, slot, force) or uploaded
+
+        try:
+            await self._session_call("Playing a stored animation", run)
+        finally:
+            # the screen no longer shows the last live picture: send it again next
+            # time, and a reconnect must not cover the animation with it
+            self._last_png = self._wanted_png = None
+            self.last_screen = "animation"
+        return uploaded
+
+    async def async_store_animation(self, gif: bytes, slot: int, play: bool = True, force: bool = False) -> bool:
+        """Store a GIF in a slot (skipped if the slot already holds it), and play it.
 
         Returns True if the GIF was uploaded. The panel then plays it by itself,
         also while disconnected, until the next live picture.
         """
-        crc = binascii.crc32(gif)
-        upload = self._stored.get(slot) != crc
+        uploaded = False
 
-        async def run(session) -> None:
+        async def run(session: PanelSession) -> None:
+            nonlocal uploaded
             if play:
                 await session.command(playlist_command([slot]))
-            if upload:
-                await session.send_gif(gif, slot)
+                self._playlist = [slot]
+            uploaded = await self._upload(session, gif, slot, force) or uploaded
 
         await self._session_call("Storing an animation", run)
-        if upload:
-            self._stored[slot] = crc
-            _LOGGER.debug("%s: stored %d bytes of animation in slot %d", self.name, len(gif), slot)
-        # the screen no longer shows the last live picture: send it again next time,
-        # and a reconnect must not cover the animation with it
-        self._last_png = self._wanted_png = None
-        self.last_screen = "animation"
-        return upload
+        if play:
+            self._last_png = self._wanted_png = None
+            self.last_screen = "animation"
+        return uploaded
 
     async def async_set_playlist(self, slots: list[int]) -> None:
-        """Play these stored slots in turn (also what shows while disconnected)."""
+        """Play these stored slots in turn; they also show whenever no live picture is
+        sent, e.g. while disconnected (the background)."""
         await self._session_call("Setting the playlist", lambda s: s.command(playlist_command(slots)))
+        self._playlist = self._background = list(slots)
         self._last_png = None
 
     async def async_set_brightness(self, level: int) -> None:
         """The panel's own brightness, 0-100 (pixels keep their full colour)."""
+        self._wanted_brightness = level
         if self._brightness == level:
             return
         await self._session_call("Setting brightness", lambda s: s.command(brightness_command(level)))

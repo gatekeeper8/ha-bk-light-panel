@@ -186,8 +186,8 @@ script:
             data:
               panel: LED_BLE_XXXXXXXX
               screen: random
+              # played from the panel's memory (each screen uploaded once)
               duration: 12
-              frame_interval: 0.8
               brightness: "{{ bright }}"
           - stop: retro shown
       - action: counter.increment

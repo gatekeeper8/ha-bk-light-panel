@@ -25,6 +25,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.typing import ConfigType
 
@@ -66,6 +67,7 @@ from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .forecast import DAY_NAMES, render_forecast
 from .panel import BkLightPanel
+from .stored import RETRO_SLOTS, retro_gif
 from .readings import ORDER as READING_KINDS, render_readings
 from .wide import (
     is_wide,
@@ -197,7 +199,12 @@ ANIMATION = {
 SHOW_RETRO_SCHEMA = vol.Schema(
     {**BASE, **ANIMATION,
      vol.Optional("screen", default="random"): vol.In([*RETRO, "random"]),
-     vol.Optional("text"): vol.Any(None, cv.string)}
+     vol.Optional("text"): vol.Any(None, cv.string),
+     # stored: the panel plays it from its own memory (uploaded once per slot);
+     # live: frames are streamed as before
+     vol.Optional("mode", default="stored"): vol.In(["stored", "live"]),
+     vol.Optional("slot"): vol.All(vol.Coerce(int), vol.Range(1, 99)),
+     vol.Optional("force", default=False): cv.boolean}
 )
 SHOW_ROOM_SCHEMA = vol.Schema(
     {**BASE, **ANIMATION,
@@ -217,6 +224,8 @@ PLAY_ANIMATION_SCHEMA = vol.Schema(
         vol.Optional("slot", default=1): vol.All(vol.Coerce(int), vol.Range(1, 99)),
         vol.Optional("text"): vol.Any(None, cv.string),
         vol.Optional("tint"): vol.Any(None, COLOR),
+        # upload even if the slot should already hold this GIF (e.g. after the phone app)
+        vol.Optional("force", default=False): cv.boolean,
     }
 )
 SET_PLAYLIST_SCHEMA = vol.Schema(
@@ -567,14 +576,49 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             call.data[ATTR_DURATION], call.data["frame_interval"],
         )
 
-    async def show_retro(call: ServiceCall) -> None:
-        """Atari READY., Commodore 64 start-up screen or marching Space Invaders."""
+    retro_gifs: dict[tuple, bytes] = {}
+
+    async def show_retro(call: ServiceCall) -> ServiceResponse:
+        """Retro screens and game animations, played from the panel's own memory.
+
+        mode stored: each screen is uploaded once to its own slot (skipped while
+        the slot holds the same GIF), then only the playlist is switched, so the
+        panel animates smoothly with no Bluetooth traffic. The next live picture
+        (e.g. the clock) takes over again as usual. If the panel does not take
+        the GIF, the screen is streamed live instead.
+        """
+        started = time.monotonic()
         panel = await _wide_panel(call)
         screen = call.data["screen"]
         if screen == "random":
             screen = random.choice(RETRO)
+        text, tint = call.data.get("text"), call.data.get("tint")
+        duration = call.data[ATTR_DURATION]
+        slot = call.data.get("slot") or RETRO_SLOTS[screen]
+        if call.data["mode"] == "stored" and not panel.upload_refused_recently(slot):
+            key = (screen, text, tuple(tint) if tint else None)
+            if key not in retro_gifs:
+                retro_gifs[key] = await hass.async_add_executor_job(retro_gif, screen, text, tint)
+            gif = retro_gifs[key]
+            try:
+                uploaded = await panel.async_play_stored(
+                    gif, slot, call.data[ATTR_BRIGHTNESS], call.data["force"]
+                )
+            except HomeAssistantError as err:
+                _LOGGER.warning("%s; showing %s live instead", err, screen)
+            else:
+                # the upload counts towards the duration
+                await asyncio.sleep(max(0.0, started + duration - time.monotonic()))
+                return {"screen": screen, "mode": "stored", "slot": slot, "uploaded": uploaded,
+                        "bytes": len(gif)}
         seed = random.randint(0, 1_000_000)  # e.g. a different file count each time
-        await _play(call, panel, lambda f: render_retro(screen, f, call.data.get("text"), seed))
+        remaining = max(0.0, started + duration - time.monotonic())
+        brightness = call.data[ATTR_BRIGHTNESS]
+        await _animate(
+            hass, panel, lambda f: to_png(apply_tint(render_retro(screen, f, text, seed), tint), brightness),
+            remaining, call.data["frame_interval"],
+        )
+        return {"screen": screen, "mode": "live"}
 
     def _number(value) -> float | None:
         try:
@@ -752,7 +796,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise ServiceValidationError("Give screen (a built-in animation) or file (a GIF)")
         frames = [apply_tint(frame, tint) for frame in frames]
         gif = await hass.async_add_executor_job(to_gif, frames, frame_ms, call.data[ATTR_BRIGHTNESS])
-        uploaded = await panel.async_store_animation(gif, call.data["slot"])
+        uploaded = await panel.async_store_animation(gif, call.data["slot"], force=call.data["force"])
         return {"bytes": len(gif), "frames": len(frames), "frame_ms": frame_ms,
                 "slot": call.data["slot"], "uploaded": uploaded}
 
@@ -769,7 +813,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(DOMAIN, "set_playlist", set_playlist, SET_PLAYLIST_SCHEMA)
     hass.services.async_register(DOMAIN, "set_brightness", set_brightness, SET_BRIGHTNESS_SCHEMA)
     hass.services.async_register(DOMAIN, "show_forecast", show_forecast, SHOW_FORECAST_SCHEMA)
-    hass.services.async_register(DOMAIN, "show_retro", show_retro, SHOW_RETRO_SCHEMA)
+    hass.services.async_register(DOMAIN, "show_retro", show_retro, SHOW_RETRO_SCHEMA,
+                                 supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "show_room", show_room, SHOW_ROOM_SCHEMA)
     hass.services.async_register(DOMAIN, "show_sky_graph", show_sky_graph, SHOW_SKY_SCHEMA)
     hass.services.async_register(DOMAIN, "show_traffic", show_traffic, SHOW_TRAFFIC_SCHEMA)
@@ -791,8 +836,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+STORE_VERSION = 1
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: BkLightConfigEntry) -> bool:
-    entry.runtime_data = BkLightPanel(hass, entry.data[CONF_ADDRESS], entry.title)
+    panel = BkLightPanel(hass, entry.data[CONF_ADDRESS], entry.title)
+    # which GIF (CRC) is in which slot, so animations are not uploaded again after a restart
+    store: Store[dict] = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+    panel.load_stored(((await store.async_load()) or {}).get("slots", {}))
+
+    def save(slots: dict[int, int]) -> None:
+        store.async_delay_save(lambda: {"slots": {str(k): v for k, v in slots.items()}}, 10)
+
+    panel.on_stored_change = save
+    entry.runtime_data = panel
     return True
 
 

@@ -669,3 +669,164 @@ def test_runner_ledge_is_dark_and_warm():
     assert len(ledge) > 60
     for r, g, b in ledge:
         assert max(r, g, b) <= 160 and r > g > b
+
+
+# ------------------------------------------------- panel state (HA stubbed)
+def _panel_module():
+    """panel.py with the few Home Assistant / bleak names it imports stubbed out."""
+    if "bkpkg.panel" in sys.modules:
+        return sys.modules["bkpkg.panel"]
+
+    def stub(name: str, **attrs):
+        module = sys.modules.get(name) or types.ModuleType(name)
+        module.__dict__.update(attrs)
+        sys.modules[name] = module
+        return module
+
+    class HomeAssistantError(Exception):
+        pass
+
+    stub("bleak"), stub("bleak.exc", BleakError=type("BleakError", (Exception,), {}))
+    stub("bleak_retry_connector", BleakClientWithServiceCache=object, establish_connection=None)
+    stub("homeassistant"), stub("homeassistant.components")
+    stub("homeassistant.components.bluetooth", async_ble_device_from_address=None)
+    sys.modules["homeassistant.components"].bluetooth = sys.modules["homeassistant.components.bluetooth"]
+    stub("homeassistant.core", HomeAssistant=object, callback=lambda f: f)
+    stub("homeassistant.exceptions", HomeAssistantError=HomeAssistantError)
+    stub("homeassistant.helpers"), stub("homeassistant.helpers.event", async_call_later=None)
+    return _load("panel")
+
+
+class RecordingPanel(FakePanel):
+    """FakePanel that keeps every complete frame / command, and can refuse GIFs."""
+
+    def __init__(self, refuse_gifs: bool = False, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.frames: list[bytes] = []
+        self.refuse_gifs = refuse_gifs
+        self.is_connected = True
+
+    def _notify(self, hex_payload: str) -> None:
+        if self.refuse_gifs and hex_payload.startswith("05 00 03"):
+            return
+        super()._notify(hex_payload)
+
+    async def write_gatt_char(self, uuid, data, response):
+        before = getattr(self, "frame", None)
+        await super().write_gatt_char(uuid, data, response)
+        if getattr(self, "frame", None) is not before:
+            self.frames.append(self.frame)
+
+
+def _connected_panel(fake: RecordingPanel):
+    panel_mod = _panel_module()
+    panel = panel_mod.BkLightPanel(None, "AA:BB:CC:DD:EE:FF", "test panel")
+
+    async def ensure_connected() -> None:
+        if panel._session is None:
+            panel._client = fake
+            panel._session = protocol.PanelSession(fake, max_write=244, acknowledged=True)
+            await panel._session.start()
+
+    async def disconnect() -> None:
+        panel._client = panel._session = None
+
+    panel._ensure_connected = ensure_connected
+    panel._disconnect = disconnect
+    return panel_mod, panel
+
+
+def _kinds(frames: list[bytes]) -> list[str]:
+    """playlist [..] / brightness n / gif slot n / png, in order."""
+    out = []
+    for f in frames:
+        if f[2:4] == b"\x08\x80":
+            out.append(f"playlist {list(f[6:])}")
+        elif f[2:4] == b"\x04\x80":
+            out.append(f"brightness {f[4]}")
+        elif f[2] == protocol.KIND_GIF:
+            out.append(f"gif {f[14]}")
+        else:
+            out.append("png")
+    return out
+
+
+def test_stored_animation_then_live_picture():
+    """Upload once (CRC), play by playlist, then a live picture restores the background."""
+    stored = _load("stored")
+    gif = stored.retro_gif("agent")
+    png = render.to_png(Image.new("RGB", (64, 16), (10, 20, 30)))
+    saved = []
+
+    async def run():
+        fake = RecordingPanel(wide=True)
+        _, panel = _connected_panel(fake)
+        panel.on_stored_change = saved.append
+        await panel.async_set_playlist([20])          # background, e.g. the safety animation
+        await panel.async_send_png(png)
+        assert await panel.async_play_stored(gif, 29, brightness=60) is True
+        await panel.async_send_png(png)               # back to the clock
+        assert await panel.async_play_stored(gif, 29, brightness=60) is False  # same CRC: no upload
+        await panel.async_send_png(png)
+        return fake
+
+    fake = asyncio.run(run())
+    assert _kinds(fake.frames) == [
+        "playlist [20]", "png",
+        "brightness 60", "playlist [29]", "gif 29",
+        "playlist [20]", "brightness 100", "png",
+        "brightness 60", "playlist [29]",
+        "playlist [20]", "brightness 100", "png",
+    ]
+    assert saved[-1] == {29: binascii.crc32(gif)}
+
+
+def test_stored_animation_dims_relative_to_wanted_brightness():
+    gif = _load("stored").retro_gif("terminal")
+
+    async def run():
+        fake = RecordingPanel(wide=True)
+        _, panel = _connected_panel(fake)
+        panel.load_stored({"26": binascii.crc32(gif)})  # known from an earlier run
+        await panel.async_set_brightness(50)
+        await panel.async_play_stored(gif, 26, brightness=60)
+        await panel.async_send_png(render.to_png(Image.new("RGB", (64, 16))))
+        return fake
+
+    assert _kinds(asyncio.run(run()).frames) == [
+        "brightness 50", "brightness 30", "playlist [26]", "brightness 50", "png"]
+
+
+def test_refused_upload_is_not_retried():
+    gif = _load("stored").retro_gif("chomper")
+    protocol.ACK_TIMEOUT = 0.05
+
+    async def run():
+        fake = RecordingPanel(refuse_gifs=True, wide=True)
+        panel_mod, panel = _connected_panel(fake)
+        try:
+            await panel.async_play_stored(gif, 27)
+        except panel_mod.UploadRefused:
+            pass
+        else:
+            raise AssertionError("expected UploadRefused")
+        return fake, panel
+
+    try:
+        fake, panel = asyncio.run(run())
+    finally:
+        protocol.ACK_TIMEOUT = 5.0
+    assert _kinds(fake.frames).count("gif 27") == 1
+    assert panel.upload_refused_recently(27) and not panel.is_stored(27, gif)
+
+
+def test_retro_gifs_are_stable_and_small():
+    stored = _load("stored")
+    assert len(set(stored.RETRO_SLOTS.values())) == len(stored.RETRO_SLOTS)
+    assert min(stored.RETRO_SLOTS.values()) > stored.SAFETY_DARK_SLOT
+    for name in stored.RETRO_SLOTS:
+        gif = stored.retro_gif(name)
+        assert gif == stored.retro_gif(name)  # same bytes, so the CRC check skips the upload
+        assert len(gif) < 32_000
+        with Image.open(BytesIO(gif)) as image:
+            assert image.size == (64, 16) and image.n_frames == stored.retro_timing(name)[0]

@@ -362,7 +362,7 @@
     },
     "show_retro": {
       "name": "Show retro screen",
-      "description": "64x16 panels: a retro screen or little animation: atari (blue 8-bit start-up screen), c64 (purple one), invaders (marching aliens), terminal (a root prompt running rm -rf /*), chomper (a green monster munching gems in a maze, a bat behind), runner (an adventurer leaping a gap), agent (an agent fighting a drone); random = any of them.",
+      "description": "64x16 panels: a retro screen or little animation: atari (blue 8-bit start-up screen), c64 (purple one), invaders (marching aliens), terminal (a root prompt running rm -rf /*), chomper (a green monster munching gems in a maze, a bat behind), runner (an adventurer leaping a gap), agent (an agent fighting a drone); random = any of them. Played from the panel's own memory: each screen is uploaded once to its own slot (23-29), then only the playlist switches.",
       "fields": {
         "screen": {
           "name": "Screen",
@@ -372,13 +372,25 @@
           "name": "Text",
           "description": "atari and c64: the scrolling line; invaders: a caption, e.g. DING DONG!"
         },
+        "mode": {
+          "name": "Mode",
+          "description": "stored (default): the panel plays the GIF from its own memory, smoothly; falls back to live if the panel does not take it. live: frames are streamed."
+        },
+        "slot": {
+          "name": "Slot",
+          "description": "Stored mode: slot to keep this screen in (default: its own, 23-29)."
+        },
+        "force": {
+          "name": "Upload again",
+          "description": "Upload even if the slot should already hold this animation (e.g. after using the phone app)."
+        },
         "duration": {
           "name": "Show for",
           "description": "Seconds on the panel."
         },
         "frame_interval": {
           "name": "Frame interval",
-          "description": "Seconds between animation frames (0 = still)."
+          "description": "Live mode only: seconds between frames (0 = still). Stored animations keep their own smooth pace."
         },
         "tint": {
           "name": "Tint",
@@ -386,7 +398,7 @@
         },
         "brightness": {
           "name": "Brightness",
-          "description": "0-100 %."
+          "description": "0-100 %. Stored mode: applied with the panel's own brightness, relative to the level set with set_brightness, and undone before the next live picture."
         },
         "panel": {
           "name": "Panel",
@@ -585,6 +597,10 @@
         "tint": {
           "name": "Tint",
           "description": "Show in one colour."
+        },
+        "force": {
+          "name": "Upload again",
+          "description": "Upload even if the slot should already hold this GIF (e.g. after using the phone app)."
         },
         "brightness": {
           "name": "Brightness",
