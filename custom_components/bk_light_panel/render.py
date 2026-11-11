@@ -222,12 +222,19 @@ def to_png(image: Image.Image, brightness: int = 100) -> bytes:
     return buffer.getvalue()
 
 
-def to_gif(frames: list[Image.Image], frame_ms: int = 100, brightness: int = 100, colors: int = 32) -> bytes:
+def to_gif(
+    frames: list[Image.Image], frame_ms: int = 100, brightness: int = 100, colors: int = 32, gamma: float = 2.2
+) -> bytes:
     """Frames as a looping GIF animation, for the panel to store and play itself.
 
     One shared palette of `colors` for all frames keeps the file small (a few KB
     for a 24-frame animation instead of 10-25 KB), so the upload is quick.
+    The panel shows GIF colours without the gamma correction it applies to live
+    pictures (dark blue came out as bright violet), so `gamma` is applied here:
+    a stored animation then looks like the same picture sent live.
     """
+    curve = [round(255 * (v / 255) ** gamma) for v in range(256)] * 3
+    frames = [frame.convert("RGB").point(curve) for frame in frames]
     width, height = frames[0].size
     strip = Image.new("RGB", (width, height * len(frames)))
     for index, frame in enumerate(frames):
