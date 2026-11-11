@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.10.0 (unreleased)
+## 0.10.0
+- **Night mode with the panel's own brightness**: the example packages draw the red
+  night clock (and readings, night aurora) at full strength and dim with
+  `set_brightness` (the night slider) instead of darkening the pixels, so dim red stays
+  readable; at day the panel goes back to 100 %. Both panels. `set_brightness` is sent
+  only when the level changes; after a reconnect the wanted brightness (and the
+  background playlist) is put back before the next picture, in case the panel was off.
 - **Safety animation**: new action `set_safety_animation` stores a calm animation (a
   slowly breathing ember with a few stars, both panel sizes) and makes it the panel's
   playlist, so a dropped connection shows it instead of the phone app's programs.

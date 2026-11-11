@@ -164,9 +164,10 @@ the panel into an info display:
 
 Change the entity names at the top of the file to yours.
 
-The panel does not light very dark pixels: a red night clock below roughly 25–30 %
-brightness can look completely black. If the screen stays dark after installing the
-package, check the two brightness sliders. After a YAML reload (instead of a restart)
+At night the red clock is drawn at full strength and the panel dims itself with its own
+brightness (`set_brightness`, the night slider), so even low values stay readable; by
+day the panel is set back to 100 % and the day slider dims the pictures. If the screen
+stays dark after installing the package, check the two brightness sliders. After a YAML reload (instead of a restart)
 they can start at their minimum values.
 
 ![Night mode](images/night_mode.png)

@@ -1,6 +1,6 @@
 # LED panel 2 (BK-Light 64x16 wide) - clock with date and outdoor readings
 # Package: /config/packages/led_panel_wide.yaml
-# Needs the bk_light_panel integration 0.9.0 or newer.
+# Needs the bk_light_panel integration 0.10.0 or newer.
 # Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
 #   night mode (binary_sensor.led_panel_night), clock style (flip / classic).
 # BRIGHTNESS: its own sliders "LED panel 2 - day / night brightness"; on
@@ -21,7 +21,8 @@
 #       runner, agent vs drone). Shares the big panel's
 #       helpers (ADS-B URL, plane range, PM2.5 alert limit, animation pace).
 #   :45 CLOCK again. Clock and readings slide in from the right.
-# NIGHT: red and dim, clock and readings only (no pictures).
+# NIGHT: red and dim, clock and readings only (no pictures). The red is drawn
+#   at full strength and the panel dims itself (its own brightness).
 # OFF: helper "LED panel 2 - screen off" on = black screen, still connected.
 #
 # Change LED_BLE_XXXXXXXX to your panel's name or Bluetooth address
@@ -83,6 +84,13 @@ script:
             {{ h >= 22 or h < 6 or (wd and 13 <= h < 15) }}
           t: "{{ states('sensor.smogomierz_temperature') }}"
           pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+      # night: full-strength pixels, dimmed by the panel itself (keeps the red
+      # readable); day: the panel at 100 % (sent only when it changes)
+      - action: bk_light_panel.set_brightness
+        continue_on_error: true
+        data:
+          panel: LED_BLE_XXXXXXXX
+          brightness: "{{ states('input_number.led_wide_night_brightness') | int(40) if night else 100 }}"
       - action: bk_light_panel.show_clock
         data:
           panel: LED_BLE_XXXXXXXX
@@ -103,7 +111,7 @@ script:
             {%- set v = pm | float(0) -%}
             {{ [0, 220, 90] if v < 15 else [255, 210, 0] if v < 35 else [255, 120, 0] if v < 55 else [255, 30, 30] }}
           brightness: >-
-            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
 
@@ -119,9 +127,16 @@ script:
       - variables:
           night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
           bright: >-
-            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
+      # night: full-strength pixels, dimmed by the panel itself (keeps the red
+      # readable); day: the panel at 100 % (sent only when it changes)
+      - action: bk_light_panel.set_brightness
+        continue_on_error: true
+        data:
+          panel: LED_BLE_XXXXXXXX
+          brightness: "{{ states('input_number.led_wide_night_brightness') | int(40) if night else 100 }}"
       # every other minute the kitchen (where the panel hangs) instead
       - if: "{{ now().minute % 2 == 1 and state_attr(kitchen, 'current_temperature') is number }}"
         then:
@@ -147,7 +162,7 @@ script:
           transition: slide
           tint: "{{ [255, 25, 0] if night else none }}"
           brightness: >-
-            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
 

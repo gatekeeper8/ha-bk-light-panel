@@ -1,7 +1,7 @@
 # LED panel (BK-Light 32x32) - status display
 # Example package: copy to /config/packages/led_panel.yaml
 # (configuration.yaml: homeassistant: packages: !include_dir_named packages)
-# Needs the bk_light_panel integration 0.8.0 or newer.
+# Needs the bk_light_panel integration 0.10.0 or newer.
 #
 # CLOCK most of the time: flip-clock cards (or classic big digits, helper
 #   "LED panel - clock style"), outdoor temperature, PM2.5 with a coloured
@@ -21,7 +21,9 @@
 # NIGHT (22:00 until 6:00 on working days, 7:00 on days off - workday
 #   sensor, so public holidays count as days off): clock only, all red,
 #   dim (helper "LED panel - night brightness"), no pictures, no alerts
-#   (the clock still flips). Day: "LED panel - day brightness".
+#   (the clock still flips). The red is drawn at full strength and the panel
+#   dims itself (its own brightness), so it stays readable when dim.
+#   Day: "LED panel - day brightness".
 # AURORA: NOAA Kp forecast (sensor "Aurora Kp max 24h", every 30 min).
 #   Daytime rotation: the aurora picture joins when Kp >= 5 is forecast
 #   in the next 24 h. Night: it breaks through, red and dim, every 5 min
@@ -63,8 +65,8 @@ input_number:
     initial: 80
     unit_of_measurement: km
     icon: mdi:radar
-  # the panel does not light very dark pixels: below ~25 % (night, red)
-  # the screen can look black - raise these if it does
+  # day: picture brightness; night: the panel's own brightness (the red clock
+  # is drawn at full strength), so low night values stay visible
   led_panel_day_brightness:
     name: LED panel - day brightness
     min: 10
@@ -230,6 +232,12 @@ script:
             {%- elif pm | float < 55 -%} [255, 120, 0]
             {%- else -%} [255, 30, 30]
             {%- endif -%}
+      # night: full-strength pixels, dimmed by the panel itself (keeps the red
+      # readable); day: the panel at 100 % (sent only when it changes)
+      - action: bk_light_panel.set_brightness
+        continue_on_error: true
+        data:
+          brightness: "{{ states('input_number.led_panel_night_brightness') | int(40) if night else 100 }}"
       - action: bk_light_panel.show_clock
         data:
           style: "{{ 'classic' if is_state('input_select.led_panel_clock_style', 'classic') else 'flip' }}"
@@ -247,7 +255,7 @@ script:
           bar_max: 75
           brightness: >-
             {%- if haunted -%} 30
-            {%- elif night -%} {{ states('input_number.led_panel_night_brightness') | int(40) }}
+            {%- elif night -%} 100
             {%- else -%} {{ states('input_number.led_panel_day_brightness') | int(60) }}
             {%- endif -%}
 
@@ -276,7 +284,7 @@ script:
             {% if not is_number(t) %}{% set t = state_attr('weather.forecast_home', 'temperature') %}{% endif %}
             {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
           bright: >-
-            {{ (states('input_number.led_panel_night_brightness') | int(40)) if is_state('binary_sensor.led_panel_night', 'on') else (states('input_number.led_panel_day_brightness') | int(60)) }}
+            {{ 100 if is_state('binary_sensor.led_panel_night', 'on') else (states('input_number.led_panel_day_brightness') | int(60)) }}
       - action: counter.increment
         target:
           entity_id: counter.led_panel_slot
@@ -353,7 +361,7 @@ script:
       - variables:
           pm: "{{ states('sensor.outdoor_pm2_5') }}"
           bright: >-
-            {{ (states('input_number.led_panel_night_brightness') | int(40)) if is_state('binary_sensor.led_panel_night', 'on') else (states('input_number.led_panel_day_brightness') | int(60)) }}
+            {{ 100 if is_state('binary_sensor.led_panel_night', 'on') else (states('input_number.led_panel_day_brightness') | int(60)) }}
       - action: bk_light_panel.show_icon
         continue_on_error: true
         data:
@@ -492,7 +500,7 @@ automation:
                   duration: 8
                   frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
                   tint: [255, 25, 0]
-                  brightness: "{{ states('input_number.led_panel_night_brightness') | int(40) }}"
+                  brightness: 100  # dimmed by the panel itself at night
               - action: script.led_panel_status
                 continue_on_error: true
 
