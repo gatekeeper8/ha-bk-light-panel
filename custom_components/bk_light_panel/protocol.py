@@ -24,7 +24,11 @@ UUID_NOTIFY = "0000fa03-0000-1000-8000-00805f9b34fb"
 HANDSHAKE_FIRST = bytes.fromhex("08 00 01 80 0E 06 32 00")
 HANDSHAKE_SECOND = bytes.fromhex("04 00 05 80")
 FRAME_VALIDATION = bytes.fromhex("05 00 00 01 00")
-VALIDATION_EVERY = 30
+# Bk-Light-AppBypass sends FRAME_VALIDATION after every 30 frames. On the
+# ACT1026 that command makes the panel briefly play the animations stored by
+# its phone app (answer 05 00 00 01 03), which shows at night as a flash every
+# 30th frame. Frames display fine without it, so it is off (None) by default.
+VALIDATION_EVERY: int | None = None
 
 ACK_TIMEOUT = 5.0
 STEP_DELAY = 0.2
@@ -126,7 +130,7 @@ class PanelSession:
             written - started, time.monotonic() - written,
         )
         self._frames_since_validation += 1
-        if self._frames_since_validation >= VALIDATION_EVERY:
+        if VALIDATION_EVERY and self._frames_since_validation >= VALIDATION_EVERY:
             await self._write(FRAME_VALIDATION, response=False)
             self._frames_since_validation = 0
         await asyncio.sleep(STEP_DELAY)
