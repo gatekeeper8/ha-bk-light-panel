@@ -35,6 +35,9 @@
 #   darkness (sun below -10 deg) decide the night break-through.
 # OFF ("LED panel - status display" off): the screen is kept black; the
 #   panel stays connected so its own stored animations never come back.
+# SAFETY: if the connection drops anyway, the panel plays a calm breathing
+#   ember from its own memory (red at night, black when OFF) - never the
+#   phone app's animations.
 # HAUNTED HOUSE: spooky clock, BOO! on corridor scares, no pictures.
 #
 # Entities used (check the names against yours):

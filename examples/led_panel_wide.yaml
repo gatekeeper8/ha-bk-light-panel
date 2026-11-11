@@ -1,6 +1,6 @@
 # LED panel 2 (BK-Light 64x16 wide) - clock with date and outdoor readings
 # Package: /config/packages/led_panel_wide.yaml
-# Needs the bk_light_panel integration 0.10.0 or newer.
+# Needs the bk_light_panel integration 0.10.1 or newer.
 # Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
 #   night mode (binary_sensor.led_panel_night), clock style (flip / classic).
 # BRIGHTNESS: its own sliders "LED panel 2 - day / night brightness"; on
@@ -8,7 +8,9 @@
 #
 # Every minute (day):
 #   :00 CLOCK - flip cards at the top, day and date in Polish under them,
-#       outdoor temperature and PM2.5 on the right; tariff colour on the hinges
+#       outdoor temperature and PM2.5 on the right in the same small font
+#       (temperature on a blue-yellow-red scale, PM2.5 by the EU air quality
+#       index: green / yellow / red); tariff colour on the hinges
 #   :15 READINGS - temperature, humidity, PM2.5, pressure, coloured by level
 #   :15 every other minute the KITCHEN instead (where the panel hangs)
 #   :30 PICTURE for 10-12 s, in turn: weather + temperature, forecast
@@ -18,7 +20,9 @@
 #       aurora (Kp >= 5), smog, moon (after dark), storage heaters
 #       charging - and now and then at random a retro screen
 #       or animation (8-bit start-up screens, aliens, rm -rf /*, maze chomper,
-#       runner, agent vs drone). Shares the big panel's
+#       runner, agent vs drone), played smoothly from the panel's own memory -
+#       and your own GIF (helper "LED panel 2 - own GIF", e.g.
+#       /config/www/my_animation.gif, 64x16; empty = left out). Shares the big panel's
 #       helpers (ADS-B URL, plane range, PM2.5 alert limit, animation pace).
 #   :45 CLOCK again. Clock and readings slide in from the right.
 # NIGHT: red and dim, clock and readings only (no pictures). The red is drawn
@@ -58,6 +62,14 @@ input_number:
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:brightness-4
+
+input_text:
+  # your own animation in the picture rotation: path of a 64x16 GIF in
+  # /config/www (up to 60 frames, few colours). Empty = left out.
+  led_wide_own_gif:
+    name: LED panel 2 - own GIF
+    max: 255
+    icon: mdi:file-gif-box
 
 counter:
   led_wide_slot:
@@ -103,13 +115,32 @@ script:
           date_color: [255, 190, 110]
           # outdoor temperature and PM2.5 on the right, coloured by level
           line1: "{{ (t | float | round(1) ~ '°') if is_number(t) else '--°' }}"
+          # temperature: a smooth scale from violet-blue (frost) through cyan,
+          # green and yellow to orange and red (heat); grey when unknown
           line1_color: >-
-            {%- set v = t | float(10) -%}
-            {{ [110, 170, 255] if v < 0 else [190, 225, 255] if v < 10 else [255, 235, 170] if v < 20 else [255, 170, 60] }}
+            {%- set v = t | float(0) -%}
+            {%- set stops = [[-20, 120, 70, 255], [-10, 50, 110, 255], [-4, 40, 170, 255],
+                             [1, 110, 230, 255], [7, 90, 255, 200], [12, 170, 255, 90],
+                             [17, 255, 245, 40], [22, 255, 200, 20], [26, 255, 140, 0],
+                             [30, 255, 70, 10], [35, 255, 0, 50]] -%}
+            {%- set ns = namespace(c=stops[0][1:]) -%}
+            {%- for i in range(stops | count - 1) -%}
+              {%- set a = stops[i] -%}{%- set b = stops[i + 1] -%}
+              {%- if v >= a[0] -%}
+                {%- set f = [1, (v - a[0]) / (b[0] - a[0])] | min -%}
+                {%- set ns.c = [(a[1] + (b[1] - a[1]) * f) | round | int,
+                                (a[2] + (b[2] - a[2]) * f) | round | int,
+                                (a[3] + (b[3] - a[3]) * f) | round | int] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.c if is_number(t) else [120, 120, 120] }}
           line2: "PM {{ pm | float | round(0) | int if is_number(pm) else '--' }}"
+          # PM2.5 by the European Air Quality Index (EEA, hourly): good / fair
+          # (up to 15) green, moderate (16-50) yellow, poor and worse (51+) red
           line2_color: >-
             {%- set v = pm | float(0) -%}
-            {{ [0, 220, 90] if v < 15 else [255, 210, 0] if v < 35 else [255, 120, 0] if v < 55 else [255, 30, 30] }}
+            {{ [120, 120, 120] if not is_number(pm) else [0, 230, 80] if v <= 15
+               else [255, 215, 0] if v <= 50 else [255, 25, 25] }}
           brightness: >-
             {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
@@ -175,11 +206,13 @@ script:
           pm: "{{ states('sensor.outdoor_pm2_5') }}"
           weather: "{{ states('weather.forecast_home') }}"
           url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
+          own_gif: "{{ states('input_text.led_wide_own_gif') | trim }}"
           slots: >-
             {% set s = [] %}
             {% if weather not in ['unknown', 'unavailable'] %}{% set s = s + ['weather', 'forecast', 'sky'] %}{% endif %}
             {% if states('sensor.wan_download') not in ['unknown', 'unavailable'] %}{% set s = s + ['traffic'] %}{% endif %}
             {% if url.startswith('http') %}{% set s = s + ['plane'] %}{% endif %}
+            {% if own_gif.startswith('/') %}{% set s = s + ['own'] %}{% endif %}
             {% if states('sensor.aurora_kp_max_24h') | float(0) >= 5 %}{% set s = s + ['aurora'] %}{% endif %}
             {% if is_number(pm) and pm | float > states('input_number.led_panel_pm25_alert') | float(35) %}{% set s = s + ['smog'] %}{% endif %}
             {% if is_state('sun.sun', 'below_horizon') %}{% set s = s + ['moon'] %}{% endif %}
@@ -268,6 +301,18 @@ script:
                       duration: 10
                       frame_interval: "{{ pace }}"
                       brightness: "{{ bright }}"
+          # your own GIF: stored in slot 3 (uploaded once, afterwards only
+          # switched); the panel plays it until the clock takes over at :45
+          - conditions: "{{ slot == 'own' }}"
+            sequence:
+              - action: bk_light_panel.play_animation
+                continue_on_error: true
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  file: "{{ own_gif }}"
+                  slot: 3
+                  frames: 60
+                  brightness: "{{ bright }}"
           - conditions: "{{ slot == 'aurora' }}"
             sequence:
               - action: bk_light_panel.show_aurora

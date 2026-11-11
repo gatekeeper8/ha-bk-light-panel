@@ -255,31 +255,31 @@ def test_clock_face():
 
 # ------------------------------------------------------------ aircraft
 ADSB = {"aircraft": [
-    {"hex": "48ae01", "flight": "LOT3KA  ", "t": "B38M", "lat": 50.20, "lon": 20.10,
+    {"hex": "48ae01", "flight": "LOT3KA  ", "t": "B38M", "lat": 52.51, "lon": 5.06,
      "alt_baro": 35000, "gs": 450, "track": 290, "seen_pos": 1.2},
-    {"hex": "4b1801", "flight": "SWR1488", "lat": 50.10, "lon": 19.90, "alt_baro": "ground"},
-    {"hex": "3c6589", "flight": "DLH4AB", "lat": 50.00, "lon": 19.80, "alt_baro": 24000, "seen_pos": 80},
-    {"hex": "471f8a", "lat": 49.90, "lon": 19.70, "alt_baro": 5200, "track": 45, "seen_pos": 3},
+    {"hex": "4b1801", "flight": "SWR1488", "lat": 52.41, "lon": 4.86, "alt_baro": "ground"},
+    {"hex": "3c6589", "flight": "DLH4AB", "lat": 52.31, "lon": 4.76, "alt_baro": 24000, "seen_pos": 80},
+    {"hex": "471f8a", "lat": 52.21, "lon": 4.66, "alt_baro": 5200, "track": 45, "seen_pos": 3},
     {"hex": "noposition"},
 ]}
 
 
 def test_nearest_aircraft_skips_ground_and_stale():
-    nearest = aircraft.pick_nearest(ADSB, 50.06, 19.94)
+    nearest = aircraft.pick_nearest(ADSB, 52.37, 4.90)
     assert nearest["callsign"] == "LOT3KA"
     assert 15 < nearest["distance_km"] < 25
     assert nearest["altitude_m"] == round(35000 * 0.3048)
-    assert aircraft.pick_nearest(ADSB, 50.06, 19.94, max_km=5) is None
-    assert aircraft.pick_nearest({}, 50, 20) is None
+    assert aircraft.pick_nearest(ADSB, 52.37, 4.90, max_km=5) is None
+    assert aircraft.pick_nearest({}, 52, 5) is None
 
 
 def test_nearest_aircraft_without_callsign_uses_hex():
-    nearest = aircraft.pick_nearest({"aircraft": [ADSB["aircraft"][3]]}, 49.9, 19.7)
+    nearest = aircraft.pick_nearest({"aircraft": [ADSB["aircraft"][3]]}, 52.21, 4.66)
     assert nearest["callsign"] == "471F8A"
 
 
 def test_aircraft_picture():
-    info = aircraft.pick_nearest(ADSB, 50.06, 19.94)
+    info = aircraft.pick_nearest(ADSB, 52.37, 4.90)
     first, later = aircraft.render_aircraft(info, 0), aircraft.render_aircraft(info, 5)
     assert first.size == (32, 32)
     assert first.tobytes() != later.tobytes()  # text alternates
@@ -316,7 +316,7 @@ def test_every_known_country_has_a_flag():
 
 
 def test_plane_with_flag():
-    info = aircraft.pick_nearest(ADSB, 50.06, 19.94)
+    info = aircraft.pick_nearest(ADSB, 52.37, 4.90)
     assert info["country"] == "PL"
     with_flag = aircraft.render_aircraft(info, 0)
     without = aircraft.render_aircraft(dict(info, country=None), 0)
@@ -386,18 +386,18 @@ def test_night_versions_replace_the_sun():
 
 def test_ovation_nowcast_at_home_and_north():
     grid = [[lon, lat, 0] for lon in range(360) for lat in range(-90, 91)]
-    values = {(19, 50): 3, (19, 54): 18, (22, 56): 25, (19, 60): 90, (30, 55): 70}
+    values = {(5, 52): 3, (5, 56): 18, (8, 58): 25, (5, 62): 90, (16, 57): 70}
     data = {"Forecast Time": "2026-11-06T06:40:00Z",
             "coordinates": [[lo, la, values.get((lo, la), v)] for lo, la, v in grid]}
-    now = aurora.ovation_at(data, 50.2547, 19.0146)
+    now = aurora.ovation_at(data, 52.37, 4.90)
     assert now["nowcast_local"] == 3
-    # within 6 deg north and 4 deg east/west: (22,56)=25 counts, (19,60) and (30,55) are too far
+    # within 6 deg north and 4 deg east/west: (8,58)=25 counts, (5,62) and (16,57) are too far
     assert now["nowcast_horizon"] == 25
     assert now["nowcast_time"] == "2026-11-06T06:40:00Z"
     # western longitudes are stored 0..359
     west = aurora.ovation_at({"coordinates": [[358, 52, 40]]}, 52.0, -2.0)
     assert west["nowcast_local"] == 40
-    assert aurora.ovation_at({}, 50, 19)["nowcast_local"] is None
+    assert aurora.ovation_at({}, 52, 5)["nowcast_local"] is None
 
 
 def test_no_validation_command_by_default():
@@ -603,7 +603,16 @@ def test_date_clock_rows_line_up():
     def rows(x0, x1):
         return [y for y in range(16) if any(max(px[x, y]) > 100 for x in range(x0, x1))]
 
-    assert rows(2, 30) == rows(33, 64) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]
+    # time 1-7 and date 11-15 on the left; temperature 2-6 (level with the
+    # time, in the date's font) and PM 11-15 on the right
+    assert rows(2, 30) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]
+    assert rows(33, 64) == [2, 3, 4, 5, 6, 11, 12, 13, 14, 15]
+
+    def first_column(y0, y1):
+        return min(x for x in range(32, 64) for y in range(y0, y1) if max(px[x, y]) > 100)
+
+    # both lines start at the same column
+    assert first_column(2, 7) == first_column(11, 16)
 
 
 def test_games():

@@ -218,7 +218,7 @@
         },
         "date_text": {
           "name": "Date line",
-          "description": "64x16 panels: the clock moves up and this line goes under it, e.g. PON 9.11."
+          "description": "64x16 panels: the clock moves up and this line goes under it, e.g. PON 9.11. Line 1 and line 2 then go beside it in the same small font: line 1 level with the time, line 2 level with the date."
         },
         "date_color": {
           "name": "Date colour",
@@ -232,7 +232,7 @@
       "fields": {
         "url": {
           "name": "Data URL",
-          "description": "Address of aircraft.json, e.g. http://192.168.1.50:8080/data/aircraft.json."
+          "description": "Address of aircraft.json, e.g. http://adsb-receiver.local:8080/data/aircraft.json."
         },
         "max_distance": {
           "name": "Maximum distance",

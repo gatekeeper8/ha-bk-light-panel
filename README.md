@@ -85,10 +85,30 @@ mean with `panel:`.
 
 [`examples/led_panel_wide.yaml`](examples/led_panel_wide.yaml) turns a 64×16 panel into a
 second clock with the date, alternating every minute with the outdoor readings and a
-rotating picture (weather, nearest plane, aurora, smog, moon, heating, season).
+rotating picture (weather, forecast, sky graph, flight board, aurora, smog, moon, heating,
+now and then a retro screen, and your own GIF).
+
+- **Clock with date**: flip cards with the day and date under them. The outdoor
+  temperature and PM2.5 go beside them in the same small font, level with the time and
+  the date. The example colours the temperature on a smooth scale (violet-blue in frost →
+  cyan → green → yellow → orange → red in heat). PM2.5 follows the bands of the
+  [European Air Quality Index](https://airindex.eea.europa.eu/AQI): green up to 15 µg/m³
+  (good / fair), yellow 16–50 (moderate), red from 51 (poor or worse).
+- **Night**: the red night screen is drawn at full strength and the panel dims itself
+  (`set_brightness`), so dim red stays readable.
+- **Your own GIF**: put a 64×16 GIF in `/config/www/` and its path into the helper
+  "LED panel 2 - own GIF". It joins the picture rotation, stored in panel slot 3: uploaded
+  once, then only switched. Use bright colours on black: the panel shows stored GIFs with
+  gamma 2.2, so dark colours get darker.
 
 ![64x16 layouts](images/wide_panel.png)
+![64x16 clock colours](images/wide_clock_colours.png)
 ![64x16 screens](images/wide_screens.png)
+
+Retro screens and the safety animation are stored in the panel and played by the panel
+itself, smoothly and without Bluetooth traffic:
+
+![Stored animations](images/stored_animations.png)
 
 ## Actions
 
@@ -138,7 +158,7 @@ data:
 ```yaml
 action: bk_light_panel.show_nearest_aircraft
 data:
-  url: http://192.168.1.50:8080/data/aircraft.json
+  url: http://adsb-receiver.local:8080/data/aircraft.json
   max_distance: 80
 response_variable: plane   # found, callsign, type, country, distance_km, altitude_m, ...
 ```
