@@ -1,0 +1,356 @@
+# LED panel 2 (BK-Light 64x16 wide) - clock with date and outdoor readings
+# Package: /config/packages/led_panel_wide.yaml
+# Needs the bk_light_panel integration 0.9.0 or newer.
+# Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
+#   night mode (binary_sensor.led_panel_night), clock style (flip / classic).
+# BRIGHTNESS: its own sliders "LED panel 2 - day / night brightness"; on
+#   first start they copy the big panel's values.
+#
+# Every minute (day):
+#   :00 CLOCK - flip cards at the top, day and date in Polish under them,
+#       outdoor temperature and PM2.5 on the right; tariff colour on the hinges
+#   :15 READINGS - temperature, humidity, PM2.5, pressure, coloured by level
+#   :15 every other minute the KITCHEN instead (where the panel hangs)
+#   :30 PICTURE for 10-12 s, in turn: weather + temperature, forecast
+#       (in 3 hours and tomorrow), sky graph
+#       (24 h temperature, day / night), network traffic (when
+#       sensor.wan_download exists), flight board (nearest 3 planes),
+#       aurora (Kp >= 5), smog, moon (after dark), storage heaters
+#       charging - and now and then at random a retro screen
+#       or animation (8-bit start-up screens, aliens, rm -rf /*, maze chomper,
+#       runner, agent vs drone). Shares the big panel's
+#       helpers (ADS-B URL, plane range, PM2.5 alert limit, animation pace).
+#   :45 CLOCK again. Clock and readings slide in from the right.
+# NIGHT: red and dim, clock and readings only (no pictures).
+# OFF: helper "LED panel 2 - screen off" on = black screen, still connected.
+#
+# Change LED_BLE_XXXXXXXX to your panel's name or Bluetooth address
+#   (Settings -> Devices); the address keeps working if you rename it.
+# Entities used (check the names against yours):
+#   sensor.smogomierz_temperature, sensor.smogomierz_humidity,
+#   sensor.smogomierz_pm2_5, sensor.smogomierz_pressure_sea_level,
+#   weather.forecast_home, sensor.aurora_kp_max_24h (led_panel.yaml), sun.sun,
+#   switch.storage_heater_charging (storage heater relay)
+
+input_boolean:
+  # off by default, so the panel shows the clock straight after install
+  led_wide_screen_off:
+    name: LED panel 2 - screen off
+    icon: mdi:monitor-off
+
+input_number:
+  # the panel does not light very dark pixels: if the red night screen
+  # looks black, raise the night value
+  led_wide_day_brightness:
+    name: LED panel 2 - day brightness
+    min: 10
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:brightness-6
+  led_wide_night_brightness:
+    name: LED panel 2 - night brightness
+    min: 5
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:brightness-4
+
+counter:
+  led_wide_slot:
+    name: LED panel 2 - rotation position
+    initial: 0
+    step: 1
+
+script:
+  led_wide_clock:
+    alias: LED panel 2 - clock with date
+    mode: queued
+    max: 2
+    sequence:
+      - variables:
+          night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
+          wd: >-
+            {% if states('binary_sensor.workday_sensor') in ['on', 'off'] %}
+              {{ is_state('binary_sensor.workday_sensor', 'on') }}
+            {% else %}
+              {{ now().weekday() < 5 }}
+            {% endif %}
+          cheap: >-
+            {% set h = now().hour %}
+            {{ h >= 22 or h < 6 or (wd and 13 <= h < 15) }}
+          t: "{{ states('sensor.smogomierz_temperature') }}"
+          pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+      - action: bk_light_panel.show_clock
+        data:
+          panel: LED_BLE_XXXXXXXX
+          style: "{{ 'classic' if is_state('input_select.led_panel_clock_style', 'classic') else 'flip' }}"
+          transition: slide
+          tint: "{{ [255, 25, 0] if night else none }}"
+          time_color: "{{ [120, 230, 140] if cheap else [255, 150, 110] }}"
+          # day and date in Polish under the clock
+          date_text: "{{ ['PN', 'WT', 'ŚR', 'CZ', 'PT', 'SO', 'ND'][now().weekday()] }} {{ now().day }}.{{ now().month }}"
+          date_color: [255, 190, 110]
+          # outdoor temperature and PM2.5 on the right, coloured by level
+          line1: "{{ (t | float | round(1) ~ '°') if is_number(t) else '--°' }}"
+          line1_color: >-
+            {%- set v = t | float(10) -%}
+            {{ [110, 170, 255] if v < 0 else [190, 225, 255] if v < 10 else [255, 235, 170] if v < 20 else [255, 170, 60] }}
+          line2: "PM {{ pm | float | round(0) | int if is_number(pm) else '--' }}"
+          line2_color: >-
+            {%- set v = pm | float(0) -%}
+            {{ [0, 220, 90] if v < 15 else [255, 210, 0] if v < 35 else [255, 120, 0] if v < 55 else [255, 30, 30] }}
+          brightness: >-
+            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
+            {%- endif -%}
+
+  led_wide_readings:
+    alias: LED panel 2 - outdoor readings / kitchen
+    mode: queued
+    max: 2
+    variables:
+      # the kitchen: a climate entity (e.g. a Netatmo radiator valve) gives
+      # the current temperature and what it heats to
+      kitchen: climate.kitchen
+    sequence:
+      - variables:
+          night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
+          bright: >-
+            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
+            {%- endif -%}
+      # every other minute the kitchen (where the panel hangs) instead
+      - if: "{{ now().minute % 2 == 1 and state_attr(kitchen, 'current_temperature') is number }}"
+        then:
+          - action: bk_light_panel.show_room
+            data:
+              panel: LED_BLE_XXXXXXXX
+              name: Kitchen
+              temperature: "{{ state_attr(kitchen, 'current_temperature') }}"
+              humidity: "{{ state_attr(kitchen, 'current_humidity') }}"
+              target: "{{ state_attr(kitchen, 'temperature') }}"
+              duration: 0
+              frame_interval: 0
+              tint: "{{ [255, 25, 0] if night else none }}"
+              brightness: "{{ bright }}"
+          - stop: kitchen shown
+      - action: bk_light_panel.show_readings
+        data:
+          panel: LED_BLE_XXXXXXXX
+          temperature: "{{ states('sensor.smogomierz_temperature') }}"
+          humidity: "{{ states('sensor.smogomierz_humidity') }}"
+          pm25: "{{ states('sensor.smogomierz_pm2_5') }}"
+          pressure: "{{ states('sensor.smogomierz_pressure_sea_level') }}"
+          transition: slide
+          tint: "{{ [255, 25, 0] if night else none }}"
+          brightness: >-
+            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
+            {%- endif -%}
+
+  led_wide_picture:
+    alias: LED panel 2 - next picture
+    mode: single
+    max_exceeded: silent
+    sequence:
+      - variables:
+          pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+          weather: "{{ states('weather.forecast_home') }}"
+          url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
+          slots: >-
+            {% set s = [] %}
+            {% if weather not in ['unknown', 'unavailable'] %}{% set s = s + ['weather', 'forecast', 'sky'] %}{% endif %}
+            {% if states('sensor.wan_download') not in ['unknown', 'unavailable'] %}{% set s = s + ['traffic'] %}{% endif %}
+            {% if url.startswith('http') %}{% set s = s + ['plane'] %}{% endif %}
+            {% if states('sensor.aurora_kp_max_24h') | float(0) >= 5 %}{% set s = s + ['aurora'] %}{% endif %}
+            {% if is_number(pm) and pm | float > states('input_number.led_panel_pm25_alert') | float(35) %}{% set s = s + ['smog'] %}{% endif %}
+            {% if is_state('sun.sun', 'below_horizon') %}{% set s = s + ['moon'] %}{% endif %}
+            {% if is_state('switch.storage_heater_charging', 'on') %}{% set s = s + ['heating'] %}{% endif %}
+            {{ s if s else ['retro'] }}
+          slot: "{{ slots[states('counter.led_wide_slot') | int(0) % slots | count] }}"
+          temp: >-
+            {% set t = states('sensor.smogomierz_temperature') %}
+            {% if not is_number(t) %}{% set t = state_attr('weather.forecast_home', 'temperature') %}{% endif %}
+            {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
+          pace: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+          bright: "{{ states('input_number.led_wide_day_brightness') | int(60) }}"
+          # now and then a retro computer screen instead (about 1 picture in 6)
+          retro: "{{ slot == 'retro' or range(6) | random == 0 }}"
+      - if: "{{ retro }}"
+        then:
+          - action: bk_light_panel.show_retro
+            continue_on_error: true
+            data:
+              panel: LED_BLE_XXXXXXXX
+              screen: random
+              duration: 12
+              frame_interval: 0.8
+              brightness: "{{ bright }}"
+          - stop: retro shown
+      - action: counter.increment
+        target:
+          entity_id: counter.led_wide_slot
+      - choose:
+          - conditions: "{{ slot == 'forecast' }}"
+            sequence:
+              - action: bk_light_panel.show_forecast
+                continue_on_error: true
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  weather: weather.forecast_home
+                  language: pl
+                  duration: 10
+                  frame_interval: "{{ pace }}"
+                  brightness: "{{ bright }}"
+          - conditions: "{{ slot == 'sky' }}"
+            sequence:
+              - action: bk_light_panel.show_sky_graph
+                continue_on_error: true
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  weather: weather.forecast_home
+                  history: sensor.smogomierz_temperature
+                  duration: 10
+                  frame_interval: 1
+                  brightness: "{{ bright }}"
+          - conditions: "{{ slot == 'traffic' }}"
+            sequence:
+              - action: bk_light_panel.show_traffic
+                continue_on_error: true
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  download: sensor.wan_download
+                  upload: sensor.wan_upload
+                  minutes: 30
+                  duration: 10
+                  frame_interval: 0.5
+                  brightness: "{{ bright }}"
+          - conditions: "{{ slot == 'plane' }}"
+            sequence:
+              - action: bk_light_panel.show_nearest_aircraft
+                continue_on_error: true
+                response_variable: plane
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  url: "{{ url }}"
+                  max_distance: "{{ states('input_number.led_panel_plane_range') | float(80) }}"
+                  count: 3
+                  duration: 9
+                  frame_interval: "{{ pace }}"
+                  brightness: "{{ bright }}"
+              # no plane in range (or receiver off): the forecast instead
+              - if: "{{ plane is not defined or not plane.found }}"
+                then:
+                  - action: bk_light_panel.show_forecast
+                    continue_on_error: true
+                    data:
+                      panel: LED_BLE_XXXXXXXX
+                      weather: weather.forecast_home
+                      language: pl
+                      duration: 10
+                      frame_interval: "{{ pace }}"
+                      brightness: "{{ bright }}"
+          - conditions: "{{ slot == 'aurora' }}"
+            sequence:
+              - action: bk_light_panel.show_aurora
+                continue_on_error: true
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  duration: 10
+                  frame_interval: "{{ pace }}"
+                  brightness: "{{ bright }}"
+        default:
+          - action: bk_light_panel.show_icon
+            continue_on_error: true
+            data:
+              panel: LED_BLE_XXXXXXXX
+              icon: "{{ weather if slot == 'weather' else slot }}"
+              caption: >-
+                {%- if slot == 'weather' -%} {{ temp }}
+                {%- elif slot == 'smog' -%} PM {{ pm | float | round(0) | int }}
+                {%- else -%} {{ none }}
+                {%- endif -%}
+              caption_color: >-
+                {%- if slot == 'weather' -%} [255, 180, 100]
+                {%- elif slot == 'smog' -%} [255, 60, 40]
+                {%- else -%} [190, 190, 220]
+                {%- endif -%}
+              duration: 10
+              frame_interval: "{{ pace }}"
+              brightness: "{{ bright }}"
+
+automation:
+  - id: led_wide_scheduler
+    alias: LED panel 2 - scheduler
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: time_pattern
+        seconds: "/5"
+      - trigger: state
+        entity_id:
+          - input_boolean.led_wide_screen_off
+          - binary_sensor.led_panel_night
+          - input_number.led_wide_day_brightness
+          - input_number.led_wide_night_brightness
+        id: now
+    conditions:
+      # a picture runs 10 s: don't interrupt it
+      - condition: state
+        entity_id: script.led_wide_picture
+        state: "off"
+    actions:
+      - variables:
+          second: "{{ now().second }}"
+          minute_tick: "{{ trigger.id == 'now' or second < 5 }}"
+          night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
+      - choose:
+          - conditions: "{{ is_state('input_boolean.led_wide_screen_off', 'on') }}"
+            sequence:
+              - if: "{{ minute_tick }}"
+                then:
+                  - action: bk_light_panel.clear
+                    continue_on_error: true
+                    data:
+                      panel: LED_BLE_XXXXXXXX
+          # the clock at the full minute (flips), again at :45 (day) / :40 (night)
+          # (repeats until the minute ends; an unchanged screen is not resent)
+          - conditions: "{{ minute_tick or second >= (40 if night else 45) }}"
+            sequence:
+              - action: script.led_wide_clock
+                continue_on_error: true
+          - conditions: "{{ (20 <= second < 25) if night else (15 <= second < 20) }}"
+            sequence:
+              - action: script.led_wide_readings
+                continue_on_error: true
+          - conditions: "{{ not night and 30 <= second < 35 }}"
+            sequence:
+              - action: script.led_wide_picture
+                continue_on_error: true
+
+  # new sliders start at their minimum: copy the big panel's values once
+  - id: led_wide_first_run
+    alias: LED panel 2 - first-run brightness
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: automation_reloaded
+    actions:
+      - if: "{{ states('input_number.led_wide_day_brightness') | float(0) <= 10 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.led_wide_day_brightness
+            data:
+              value: "{{ states('input_number.led_panel_day_brightness') | float(60) }}"
+      - if: "{{ states('input_number.led_wide_night_brightness') | float(0) <= 5 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.led_wide_night_brightness
+            data:
+              value: "{{ states('input_number.led_panel_night_brightness') | float(40) }}"

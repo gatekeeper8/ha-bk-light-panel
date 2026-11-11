@@ -77,7 +77,8 @@ def test_chunking():
 class FakePanel:
     """Behaves like the panel: answers handshake and complete frames."""
 
-    def __init__(self, answer_stage_two: bool = True) -> None:
+    def __init__(self, answer_stage_two: bool = True, wide: bool = False) -> None:
+        self.wide = wide
         self.callback = None
         self.writes: list[tuple[bytes, bool]] = []
         self.buffer = b""
@@ -95,7 +96,10 @@ class FakePanel:
         data = bytes(data)
         self.writes.append((data, response))
         if data == protocol.HANDSHAKE_FIRST:
-            self._notify("0C 00 01 80 81 06 32 00 00 01 00 01")
+            if self.wide:  # 64x16 (ACT1025 / ACT1033)
+                self._notify("0B 00 01 80 83 06 32 00 00 01 00")
+            else:
+                self._notify("0C 00 01 80 81 06 32 00 00 01 00 01")
         elif data == protocol.HANDSHAKE_SECOND:
             if self.answer_stage_two:
                 self._notify("08 00 05 80 0B 03 07 02")
@@ -107,7 +111,10 @@ class FakePanel:
             if len(self.buffer) >= expected:
                 self.frame = self.buffer
                 self.buffer = b""
-                self._notify("05 00 02 00 03")
+                if self.frame[3:4] == b"\x80":  # a short command (playlist 08, brightness 04)
+                    self._notify(f"05 00 {self.frame[2]:02x} 80 01")
+                else:  # a picture (02) or a stored animation (03)
+                    self._notify(f"05 00 {self.frame[2]:02x} 00 03")
 
 
 def test_session_handshake_and_chunked_frame():
@@ -125,8 +132,21 @@ def test_session_handshake_and_chunked_frame():
     assert len(handshakes) == 1
     assert fake.frame == protocol.build_frame(png)
     frame_writes = [(w, r) for w, r in fake.writes if w not in (protocol.HANDSHAKE_FIRST, protocol.HANDSHAKE_SECOND)]
-    assert all(r is True for _, r in frame_writes)
+    assert all(r is False for _, r in frame_writes)  # write commands by default
     assert all(len(w) <= 64 for w, _ in frame_writes)
+
+
+def test_acknowledged_writes_when_asked():
+    async def run():
+        fake = FakePanel()
+        session = protocol.PanelSession(fake, max_write=64, acknowledged=True)
+        await session.start()
+        await session.send_png(render.to_png(render.render_fill([9, 9, 9])))
+        return fake
+
+    fake = asyncio.run(run())
+    frame_writes = [r for w, r in fake.writes if w not in (protocol.HANDSHAKE_FIRST, protocol.HANDSHAKE_SECOND)]
+    assert frame_writes and all(frame_writes)
 
 
 def test_session_tolerates_missing_second_ack():
@@ -397,3 +417,242 @@ def test_no_validation_command_by_default():
 
     fake = asyncio.run(run())
     assert not [w for w, _ in fake.writes if w == protocol.FRAME_VALIDATION]
+
+
+def test_size_from_handshake():
+    async def run(wide):
+        session = protocol.PanelSession(FakePanel(wide=wide))
+        await session.start()
+        assert session.size is None
+        await session.ensure_primed()
+        return session.size
+
+    assert asyncio.run(run(False)) == (32, 32)
+    assert asyncio.run(run(True)) == (64, 16)
+
+
+# ------------------------------------------------------------ wide panel
+def _load_all():
+    for name in ("gfx", "flags", "icons", "aircraft", "aurora", "wide"):
+        if f"bkpkg.{name}" not in sys.modules:
+            _load(name)
+    return sys.modules["bkpkg.wide"], sys.modules["bkpkg.icons"]
+
+
+def test_wide_layouts_are_64x16():
+    from datetime import UTC, datetime, timedelta
+
+    wide, icons = _load_all()
+    images = [
+        wide.render_clock_wide("21:47", line1="9°C", line2="PM 12", bar_value=12),
+        wide.render_clock_wide("21:48", "21:47", 0, line1="9°C"),
+        wide.render_clock_wide("07:05", style="classic", line1="12°C", line2="PM 8"),
+        wide.render_aircraft_wide({"callsign": "LOT3925", "type": "B738", "country": "PL",
+                                   "track": 250, "altitude_m": 10500, "distance_km": 23}),
+        wide.render_aircraft_wide({"callsign": "N123", "track": 90}, 5),  # no country
+        wide.render_aurora_wide([{"time": datetime(2026, 11, 7, tzinfo=UTC) + timedelta(hours=3 * i),
+                                  "kp": k} for i, k in enumerate([2, 4, 6.3, 5])], 1),
+        wide.render_aurora_wide([]),
+        render.render_text("HELLO WORLD", size=(64, 16)),
+        render.render_fill([1, 2, 3], (64, 16)),
+    ]
+    for name in icons.ICONS:
+        images.append(wide.render_icon_wide(name, frame=2))
+        images.append(wide.render_icon_wide(name, "", frame=1, night=True))
+    assert all(image.size == (64, 16) for image in images)
+    # the clock leaves the right half for the text lines
+    assert images[0].crop((32, 0, 64, 16)).getbbox() is not None
+
+
+def test_wide_captions_fit():
+    wide, icons = _load_all()
+    for lang in icons.LANGUAGES:
+        for name in ("moon", "heating", "spring", "summer", "autumn", "winter"):
+            caption = wide.auto_caption(name, lang)
+            assert caption and render.text_width(caption) <= 46, (lang, caption)
+
+
+def test_readings_both_sizes():
+    readings = _load("readings")
+    values = {"temperature": -12.3, "humidity": 81.0, "pm25": 88.0, "pressure": None}
+    for size in ((64, 16), (32, 32)):
+        image = readings.render_readings(values, size)
+        assert image.size == size and image.getbbox() is not None
+    assert readings.text_for("temperature", 6.14) == "6.1°"
+    assert readings.text_for("temperature", -12.3) == "-12°"
+    assert readings.color_for("pm25", 88) == (255, 30, 30)
+
+
+def test_slide_frames_push_left():
+    from PIL import Image as PILImage
+
+    wide, _ = _load_all()
+    old = PILImage.new("RGB", (64, 16), (255, 0, 0))
+    new = PILImage.new("RGB", (64, 16), (0, 0, 255))
+    frames = wide.slide_frames(old, new)
+    assert len(frames) == 3
+    assert frames[0].getpixel((0, 0)) == (255, 0, 0) and frames[0].getpixel((63, 0)) == (0, 0, 255)
+    assert frames[1].getpixel((31, 0)) == (255, 0, 0) and frames[1].getpixel((32, 0)) == (0, 0, 255)
+
+
+def test_font7_glyphs_are_consistent():
+    font7 = _load("font7")
+    for char, rows in font7.GLYPHS.items():
+        assert len(rows) == 7, char
+        assert len({len(r) for r in rows}) == 1, char
+    assert font7.fits("SAT 7") and font7.width("SAT 7") <= 30
+    for word in ("CHARGING", "CRESCENT", "AUTUMN", "LOT3925", "↑10.5KM"):
+        assert font7.width(word) <= 46, word
+
+
+def test_wide_boards():
+    from datetime import UTC, datetime, timedelta
+
+    _load_all()
+    boards = _load("boards")
+    plane = {"callsign": "LOT3925", "type": "B738", "country": "PL", "track": 250,
+             "altitude_m": 10500, "distance_km": 23}
+    start = datetime(2026, 11, 7, 14, tzinfo=UTC)
+    points = [(start + timedelta(hours=h), 5.0 + h * 0.2) for h in range(25)]
+    temps, day = boards.sky_columns(points, start, lambda t: 7 <= t.hour < 16)
+    assert len(temps) == 64 and None not in temps and day[0] and not day[20]
+    images = [
+        boards.render_flight_board(plane, 0, 80), boards.render_flight_board({"callsign": "X"}, 5),
+        boards.render_sky_graph(temps, day, 16, 1), boards.render_sky_graph([None] * 64, [True] * 64, 0),
+        boards.render_room("Kitchen", 22.4, 45, 2), boards.render_room("Kitchen", None),
+        boards.render_traffic([10, 50, 120], [2, 5, 9], 3), boards.render_traffic([], [], 0),
+    ]
+    images += [boards.render_retro(name, f) for name in boards.RETRO for f in (0, 7, 15)]
+    assert all(image.size == (64, 16) for image in images)
+    assert boards.comfort_color(22) == (110, 235, 140)
+
+
+def test_frame_in_small_pieces():
+    """244-byte pieces: the frame arrives whole, in more writes."""
+    async def run():
+        fake = FakePanel()
+        session = protocol.PanelSession(fake, max_write=244)
+        protocol.STEP_DELAY, saved = 0, protocol.STEP_DELAY
+        try:
+            await session.start()
+            png = render.to_png(render.render_text("HELLO WORLD 123"), 100)
+            fake.writes.clear()
+            await session.send_png(png)
+        finally:
+            protocol.STEP_DELAY = saved
+        return fake, png
+
+    fake, png = asyncio.run(run())
+    pieces = [w for w, _ in fake.writes]
+    assert not any(response for _, response in fake.writes)  # write commands by default
+    assert all(len(p) <= 244 for p in pieces)
+    assert png in b"".join(pieces)
+
+
+def test_unconfirmed_picture_raises():
+    """No 05 00 02 00 03 after the pieces: FrameNotConfirmed (panel then falls back)."""
+    class Silent(FakePanel):
+        def _notify(self, text):
+            if not text.startswith("05"):
+                super()._notify(text)
+
+    async def run():
+        session = protocol.PanelSession(Silent(), max_write=244)
+        saved = protocol.STEP_DELAY, protocol.ACK_TIMEOUT
+        protocol.STEP_DELAY, protocol.ACK_TIMEOUT = 0, 0.2
+        try:
+            await session.start()
+            await session.send_png(render.to_png(render.render_fill([1, 2, 3])))
+        finally:
+            protocol.STEP_DELAY, protocol.ACK_TIMEOUT = saved
+
+    try:
+        asyncio.run(run())
+    except protocol.FrameNotConfirmed:
+        pass
+    else:
+        raise AssertionError("expected FrameNotConfirmed")
+
+
+def test_forecast_and_date_clock():
+    _load_all()
+    forecast = _load("forecast")
+    wide = sys.modules["bkpkg.wide"]
+    points = [{"condition": "rainy", "label": "10H", "temperature": 6.4},
+              {"condition": "partlycloudy", "label": "ŚR", "temperature": -12}]
+    for size in ((64, 16), (32, 32)):
+        image = forecast.render_forecast(points, size, 1)
+        assert image.size == size
+    # the second temperature on 32x32 sits low (y 24..30) and must be drawn
+    square = forecast.render_forecast(points, (32, 32))
+    assert square.crop((16, 24, 32, 31)).getbbox() is not None
+    clock = wide.render_clock_wide("07:24", line1="6.4°", line2="PM 27", date_text="PON 9.11")
+    assert clock.size == (64, 16)
+    assert clock.crop((0, 11, 32, 16)).getbbox() is not None  # the date line
+    assert forecast.DAY_NAMES["pl"][2] == "ŚR"
+
+
+def test_date_clock_rows_line_up():
+    """Left (time, date) and right (temperature, PM) use the same rows and sizes."""
+    _load_all()
+    wide = sys.modules["bkpkg.wide"]
+    img = wide.render_clock_wide("18:52", line1="-12.3°", line2="PM 112", date_text="ŚR 11.11",
+                                 time_color=[255, 255, 255])
+    px = img.load()
+
+    def rows(x0, x1):
+        return [y for y in range(16) if any(max(px[x, y]) > 100 for x in range(x0, x1))]
+
+    assert rows(2, 30) == rows(33, 64) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]
+
+
+def test_games():
+    _load_all()
+    games = _load("games")
+    for name in games.GAMES:
+        for f in range(0, 50, 7):
+            image = games.render_game(name, f, seed=3)
+            assert image.size == (64, 16) and image.getbbox() is not None
+    # the terminal ends with a file count
+    last = games.render_terminal(games.terminal_frames(3) - 2, 3)
+    assert last.getbbox() is not None
+
+
+# Bytes recorded from the panel's phone app (2026-11-11), to check our frames.
+APP_GIF_HEADER = bytes.fromhex("53 01 03 00 00 44 01 00 00 eb 35 82 3f 02 04")
+APP_PLAYLIST_ONE = bytes.fromhex("07 00 08 80 01 00 08")
+APP_PLAYLIST_TWO = bytes.fromhex("08 00 08 80 02 00 07 08")
+
+
+def test_frames_match_the_app():
+    gif = b"G" * 324
+    frame = protocol.build_frame(gif, protocol.KIND_GIF, mode=0x02, slot=4)
+    assert frame[:9] == APP_GIF_HEADER[:9] and frame[13:15] == APP_GIF_HEADER[13:15]
+    assert len(frame) == 339
+    assert protocol.playlist_command([8]) == APP_PLAYLIST_ONE
+    assert protocol.playlist_command([7, 8]) == APP_PLAYLIST_TWO
+    assert protocol.brightness_command(94) == bytes.fromhex("05 00 04 80 5e")
+    assert protocol.is_ack_frame(bytes.fromhex("05 00 03 00 03"))
+    assert protocol.command_ack(bytes.fromhex("05 00 08 80 01")) == 0x08
+    # a live picture keeps slot 101
+    assert protocol.build_frame(b"P" * 10)[13:15] == b"\x00\x65"
+
+
+def test_store_gif_and_commands():
+    from PIL import Image as PILImage
+
+    async def run():
+        fake = FakePanel(wide=True)
+        session = protocol.PanelSession(fake, max_write=244, acknowledged=True)
+        await session.start()
+        frames = [PILImage.new("RGB", (64, 16), (255 * (i % 2), 0, 255)) for i in range(4)]
+        gif = render.to_gif(frames, 90)
+        await session.command(protocol.playlist_command([3]))
+        await session.send_gif(gif, 3)
+        await session.command(protocol.brightness_command(40))
+        return fake, gif
+
+    fake, gif = asyncio.run(run())
+    assert fake.frame[2] == 0x04  # the last command: brightness
+    with PILImage.open(__import__("io").BytesIO(gif)) as image:
+        assert image.size == (64, 16) and image.n_frames == 4

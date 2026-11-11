@@ -42,11 +42,11 @@ def bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return (math.degrees(math.atan2(x, y)) + 360) % 360
 
 
-def pick_nearest(
-    data: dict[str, Any], lat: float, lon: float, max_km: float = 100.0
-) -> dict[str, Any] | None:
-    """Closest airborne aircraft with a recent position, or None."""
-    best: dict[str, Any] | None = None
+def pick_nearby(
+    data: dict[str, Any], lat: float, lon: float, max_km: float = 100.0, count: int = 3
+) -> list[dict[str, Any]]:
+    """Airborne aircraft with a recent position within max_km, nearest first."""
+    found: list[dict[str, Any]] = []
     for ac in data.get("aircraft", []):
         if not isinstance(ac, dict) or "lat" not in ac or "lon" not in ac:
             continue
@@ -56,10 +56,10 @@ def pick_nearest(
             d = distance_km(lat, lon, float(ac["lat"]), float(ac["lon"]))
         except (TypeError, ValueError):
             continue
-        if d > max_km or (best and d >= best["distance_km"]):
+        if d > max_km:
             continue
         altitude = ac.get("alt_geom", ac.get("alt_baro"))
-        best = {
+        found.append({
             "hex": ac.get("hex", ""),
             "callsign": (ac.get("flight") or "").strip() or (ac.get("r") or "").strip()
             or ac.get("hex", "?").upper(),
@@ -73,8 +73,17 @@ def pick_nearest(
             "bearing": round(bearing_deg(lat, lon, float(ac["lat"]), float(ac["lon"]))),
             "latitude": ac["lat"],
             "longitude": ac["lon"],
-        }
-    return best
+        })
+    found.sort(key=lambda p: p["distance_km"])
+    return found[: max(1, count)]
+
+
+def pick_nearest(
+    data: dict[str, Any], lat: float, lon: float, max_km: float = 100.0
+) -> dict[str, Any] | None:
+    """Closest airborne aircraft with a recent position, or None."""
+    nearby = pick_nearby(data, lat, lon, max_km, 1)
+    return nearby[0] if nearby else None
 
 
 def _altitude_text(meters: int | None) -> str:

@@ -211,6 +211,18 @@
         "tint": {
           "name": "Tint",
           "description": "Show the whole clock in one colour, e.g. red at night. Empty = normal colours."
+        },
+        "transition": {
+          "name": "Transition",
+          "description": "slide = the new screen pushes a different one out to the left (e.g. clock after readings)."
+        },
+        "date_text": {
+          "name": "Date line",
+          "description": "64x16 panels: the clock moves up and this line goes under it, e.g. PON 9.11."
+        },
+        "date_color": {
+          "name": "Date colour",
+          "description": "Colour of the date line."
         }
       }
     },
@@ -249,6 +261,10 @@
         "frame_interval": {
           "name": "Frame interval",
           "description": "Seconds between animation frames. The panel needs time to show each frame; too fast makes it lag behind. 0 = still picture."
+        },
+        "count": {
+          "name": "Planes",
+          "description": "64x16 panels: the nearest planes in turn, each sliding in."
         }
       }
     },
@@ -299,6 +315,312 @@
         "longitude": {
           "name": "Longitude",
           "description": "Your position for the nowcast. Default: the home location."
+        }
+      }
+    },
+    "show_readings": {
+      "name": "Show readings",
+      "description": "Up to four readings with small icons, coloured by level (temperature, humidity, PM2.5, PM10, pressure, in that order). Unavailable values show as --.",
+      "fields": {
+        "temperature": {
+          "name": "Temperature",
+          "description": "°C; coloured from blue (frost) to red (heat)."
+        },
+        "humidity": {
+          "name": "Humidity",
+          "description": "Relative humidity in %."
+        },
+        "pm25": {
+          "name": "PM2.5",
+          "description": "µg/m³; green, yellow, orange, red with the air quality."
+        },
+        "pm10": {
+          "name": "PM10",
+          "description": "µg/m³; coloured like PM2.5."
+        },
+        "pressure": {
+          "name": "Pressure",
+          "description": "hPa."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        },
+        "transition": {
+          "name": "Transition",
+          "description": "slide = the new screen pushes a different one out to the left (e.g. clock after readings)."
+        }
+      }
+    },
+    "show_retro": {
+      "name": "Show retro screen",
+      "description": "64x16 panels: a retro screen or little animation: atari (blue 8-bit start-up screen), c64 (purple one), invaders (marching aliens), terminal (a root prompt running rm -rf /*), chomper (a green monster munching gems in a maze, a bat behind), runner (an adventurer leaping a gap), agent (an agent fighting a drone); random = any of them.",
+      "fields": {
+        "screen": {
+          "name": "Screen",
+          "description": "One of the screens above, or random."
+        },
+        "text": {
+          "name": "Text",
+          "description": "atari and c64: the scrolling line; invaders: a caption, e.g. DING DONG!"
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_room": {
+      "name": "Show room",
+      "description": "64x16 panels: a steaming pot, the room name, its temperature (blue cool, green comfortable, orange warm) and humidity, or the set point of a radiator valve.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Room name, e.g. Kitchen."
+        },
+        "temperature": {
+          "name": "Temperature",
+          "description": "°C."
+        },
+        "humidity": {
+          "name": "Humidity",
+          "description": "%."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        },
+        "target": {
+          "name": "Set point",
+          "description": "Shown as →20° when there is no humidity, e.g. a radiator valve's target."
+        }
+      }
+    },
+    "show_sky_graph": {
+      "name": "Show sky graph",
+      "description": "64x16 panels: 24 hours of temperature, the last hours from history and the hourly forecast; day warm with a sun, night blue with stars, now as a blinking line.",
+      "fields": {
+        "weather": {
+          "name": "Weather",
+          "description": "Weather entity with an hourly forecast."
+        },
+        "history": {
+          "name": "History sensor",
+          "description": "Temperature sensor for the hours before now (needs the recorder)."
+        },
+        "hours_back": {
+          "name": "Hours back",
+          "description": "How much of the past to show."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_traffic": {
+      "name": "Show network traffic",
+      "description": "64x16 panels: download (up) and upload (down) of the last minutes from history, with the current rates and packets running along the middle.",
+      "fields": {
+        "download": {
+          "name": "Download sensor",
+          "description": "Data-rate sensor (bit/s, kbit/s, Mbit/s, B/s, kB/s, MB/s ...)."
+        },
+        "upload": {
+          "name": "Upload sensor",
+          "description": "Data-rate sensor."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Time across the panel."
+        },
+        "max_rate": {
+          "name": "Top of the graph",
+          "description": "Mbit/s; empty = the highest value shown."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "show_forecast": {
+      "name": "Show forecast",
+      "description": "Weather in a few hours and tomorrow: picture, hour or weekday, temperature (side by side on 64x16, stacked on 32x32).",
+      "fields": {
+        "weather": {
+          "name": "Weather",
+          "description": "Weather entity with hourly and daily forecasts."
+        },
+        "hours_ahead": {
+          "name": "Hours ahead",
+          "description": "The first point: this many hours from now."
+        },
+        "language": {
+          "name": "Language",
+          "description": "Weekday names: en or pl (default: Home Assistant's language)."
+        },
+        "duration": {
+          "name": "Show for",
+          "description": "Seconds on the panel."
+        },
+        "frame_interval": {
+          "name": "Frame interval",
+          "description": "Seconds between animation frames (0 = still)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "play_animation": {
+      "name": "Play animation (stored)",
+      "description": "Stores an animation in one of the panel's slots as a GIF; the panel then plays it by itself, smoothly, also while disconnected, until the next picture. A built-in animation (64x16) or your own GIF file.",
+      "fields": {
+        "screen": {
+          "name": "Built-in animation",
+          "description": "atari, c64, invaders, terminal, chomper, runner or agent (64x16 panels)."
+        },
+        "file": {
+          "name": "GIF file",
+          "description": "Your own GIF (in an allowed folder, e.g. /config/www); scaled to the panel."
+        },
+        "frames": {
+          "name": "Frames",
+          "description": "How many frames to store (built-in animations, or the first frames of a file)."
+        },
+        "frame_ms": {
+          "name": "Frame time",
+          "description": "Milliseconds per frame (built-in animations; a file keeps its own timing)."
+        },
+        "slot": {
+          "name": "Slot",
+          "description": "The panel's storage slot; an unchanged animation is not uploaded again."
+        },
+        "text": {
+          "name": "Text",
+          "description": "atari and c64: the scrolling line; invaders: a caption."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 % (darkens the pixels)."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "set_playlist": {
+      "name": "Set playlist",
+      "description": "Which stored slots the panel plays in turn; also what it shows while nothing is connected.",
+      "fields": {
+        "slots": {
+          "name": "Slots",
+          "description": "A list of slot numbers, e.g. [1] or [1, 2]."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "set_brightness": {
+      "name": "Set panel brightness",
+      "description": "The panel's own brightness, 0-100 %. Unlike the brightness of a picture it keeps the pixels' full colour, so dim screens stay readable.",
+      "fields": {
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
         }
       }
     }

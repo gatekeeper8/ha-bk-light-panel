@@ -1,7 +1,8 @@
 # BK-Light LED panel for Home Assistant
 
-Control the **Action "BK-Light" 32×32 RGB LED pixel panel** (ACT1026, shows up in
-Bluetooth as `LED_BLE_xxxxxxxx`) directly from Home Assistant, without the phone app.
+Control the **Action "BK-Light" RGB LED pixel panels**: the square 32×32 (ACT1026) and
+the wide 64×16 (ACT1025 / ACT1033), which show up in Bluetooth as `LED_BLE_xxxxxxxx`,
+directly from Home Assistant, without the phone app.
 Clocks, weather pictures, moon phase, the nearest aircraft from your ADS-B receiver,
 an aurora forecast, alerts and your own images.
 
@@ -52,7 +53,7 @@ English, or Polish ([Polish gallery](images/pictures_pl.png)). Force one with
   ```
 - The panel's phone app must be **closed**: the panel accepts only one connection.
 
-Tested with the ACT1026 32×32 panel. Other devices that also advertise as `LED_BLE_…`
+Tested with the ACT1026 (32×32) and ACT1033 (64×16) panels. Other devices that also advertise as `LED_BLE_…`
 (cheap LED strips and lamps use the same name) may use a different protocol and will
 not work.
 
@@ -73,6 +74,22 @@ The panel is usually discovered automatically (Settings → Devices & services).
 Otherwise: **Add integration → BK-Light LED panel**, pick the panel from the list, or
 enter its Bluetooth address (Settings → Bluetooth → Advertisement monitor).
 
+## Wide 64×16 panels
+
+The integration reads the panel's size from its first answer, so the same actions work
+on both. On a 64×16 panel the clock sits on the left with the two text lines and the
+level bar beside it, pictures get their caption beside them, the nearest plane becomes a
+flight-board line (plane on its track, flag, callsign / type, altitude / distance) and
+the aurora shows the Kp bars with the peak hour. With several panels, name the one you
+mean with `panel:`.
+
+[`examples/led_panel_wide.yaml`](examples/led_panel_wide.yaml) turns a 64×16 panel into a
+second clock with the date, alternating every minute with the outdoor readings and a
+rotating picture (weather, nearest plane, aurora, smog, moon, heating, season).
+
+![64x16 layouts](images/wide_panel.png)
+![64x16 screens](images/wide_screens.png)
+
 ## Actions
 
 With one panel the `panel` field can be left out; with several, give the panel's name
@@ -85,6 +102,15 @@ or address.
 | `bk_light_panel.show_icon` | Built-in picture (weather state, `moon`, `season`, `autumn`…`summer`, `smog`, `heating`), `caption`, `duration`, `frame_interval` |
 | `bk_light_panel.show_nearest_aircraft` | Closest plane from your ADS-B `aircraft.json` (`url`, `max_distance`); returns the plane's data |
 | `bk_light_panel.show_aurora` | NOAA Kp forecast for the next 24 h; `min_kp`, `show: false` = only return the data |
+| `bk_light_panel.show_readings` | Up to four readings with icons, coloured by level: `temperature`, `humidity`, `pm25`, `pm10`, `pressure` |
+| `bk_light_panel.show_forecast` | Weather in a few hours and tomorrow: picture, hour / weekday, temperature |
+| `bk_light_panel.show_sky_graph` | 64×16: 24 h of temperature (history + hourly forecast), day and night marked |
+| `bk_light_panel.show_room` | 64×16: a room's name, temperature and humidity |
+| `bk_light_panel.show_traffic` | 64×16: network download / upload of the last minutes, from data-rate sensors |
+| `bk_light_panel.show_retro` | 64×16: retro screens and little animations (8-bit start-up screens, aliens, a root prompt running `rm -rf /*`, a maze chomper, a runner, an agent vs a drone) |
+| `bk_light_panel.play_animation` | Store an animation (built-in or your GIF) in a panel slot; the panel plays it smoothly by itself |
+| `bk_light_panel.set_playlist` | Which stored slots play in turn (also while disconnected) |
+| `bk_light_panel.set_brightness` | The panel's own brightness, 0–100 % (keeps full colour) |
 | `bk_light_panel.show_image` | Your own picture file (must be in an allowed folder, e.g. `/config/www`) |
 | `bk_light_panel.fill` / `clear` | One colour / black |
 

@@ -7,6 +7,7 @@ Bluetooth proxies with active connections enabled.
 from __future__ import annotations
 
 import asyncio
+import binascii
 import time
 import logging
 from collections.abc import Callable
@@ -20,8 +21,15 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 
-from .const import IDLE_DISCONNECT_SECONDS, RECOVER_DELAYS
-from .protocol import PanelSession
+from .const import (
+    ACKNOWLEDGED_MINUTES,
+    FAST_WRITES,
+    IDLE_DISCONNECT_SECONDS,
+    MAX_PIECE_BYTES,
+    RECOVER_DELAYS,
+    UNCONFIRMED_LIMIT,
+)
+from .protocol import FrameNotConfirmed, PanelSession, brightness_command, playlist_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,9 +55,44 @@ class BkLightPanel:
         self._closing = False
         self._shutting_down = False
         self._recover_task: asyncio.Task | None = None
+        # per-piece receipts; switched on only if the panel misses pictures without
+        self._acknowledged_writes = not FAST_WRITES
+        self._unconfirmed_in_row = 0  # pictures missed in a row without receipts
+        self._acknowledged_since = 0.0
+        self._stored: dict[int, int] = {}  # slot -> CRC of the GIF stored there
+        self._brightness: int | None = None  # the panel's own brightness, once set
+        # what kind of screen is shown ("clock", "readings"; None = anything else)
+        self.last_screen: str | None = None
+        # (width, height), known after the first handshake
+        self.size: tuple[int, int] | None = None
 
-    async def async_send_png(self, png: bytes) -> None:
+    async def async_get_size(self) -> tuple[int, int]:
+        """The panel's size in pixels; connects once to ask if not known yet."""
+        if self.size:
+            return self.size
+        async with self._lock:
+            if not self.size:
+                try:
+                    await self._ensure_connected()
+                    assert self._session is not None
+                    await self._session.ensure_primed()
+                except (BleakError, TimeoutError, EOFError, OSError) as err:
+                    await self._disconnect()
+                    raise HomeAssistantError(
+                        f"Cannot reach {self.name}: {err or type(err).__name__}"
+                    ) from err
+                self.size = self._session.size or (32, 32)
+                _LOGGER.debug("%s is %dx%d pixels", self.name, *self.size)
+        return self.size
+
+    @property
+    def screen_png(self) -> bytes | None:
+        """The picture that should be on the screen now."""
+        return self._wanted_png
+
+    async def async_send_png(self, png: bytes, screen: str | None = None) -> None:
         """Send one image, reconnecting once if the link dropped."""
+        self.last_screen = screen
         async with self._lock:
             self._stop_idle_timer()
             try:
@@ -62,9 +105,21 @@ class BkLightPanel:
                         assert self._session is not None
                         await self._session.send_png(png)
                         self._last_png = self._wanted_png = png
+                        self._unconfirmed_in_row = 0
                         return
                     except (BleakError, TimeoutError, EOFError, OSError) as err:
                         _LOGGER.debug("Send to %s failed (attempt %s): %s", self.name, attempt, err)
+                        if isinstance(err, FrameNotConfirmed) and not self._acknowledged_writes:
+                            self._unconfirmed_in_row += 1
+                            if self._unconfirmed_in_row >= UNCONFIRMED_LIMIT:
+                                _LOGGER.warning(
+                                    "%s missed %d pictures in a row sent without receipts; "
+                                    "using acknowledged writes for %d minutes",
+                                    self.name, self._unconfirmed_in_row, ACKNOWLEDGED_MINUTES,
+                                )
+                                self._acknowledged_writes = True
+                                self._acknowledged_since = time.monotonic()
+                                self._unconfirmed_in_row = 0
                         self._last_png = None  # screen content unknown now
                         await self._disconnect()
                         if attempt == 2:
@@ -76,6 +131,59 @@ class BkLightPanel:
                     self._cancel_idle = async_call_later(
                         self.hass, IDLE_DISCONNECT_SECONDS, self._idle_disconnect
                     )
+
+    async def _session_call(self, what: str, call) -> None:
+        """Run call(session) with the lock held; reconnect and retry once."""
+        async with self._lock:
+            self._stop_idle_timer()
+            for attempt in (1, 2):
+                try:
+                    await self._ensure_connected()
+                    assert self._session is not None
+                    await call(self._session)
+                    return
+                except (BleakError, TimeoutError, EOFError, OSError) as err:
+                    _LOGGER.debug("%s on %s failed (attempt %s): %s", what, self.name, attempt, err)
+                    await self._disconnect()
+                    if attempt == 2:
+                        raise HomeAssistantError(f"{what} on {self.name} failed: {err or type(err).__name__}") from err
+
+    async def async_store_animation(self, gif: bytes, slot: int, play: bool = True) -> bool:
+        """Store a GIF in a slot (skipped if the slot already holds it) and play it.
+
+        Returns True if the GIF was uploaded. The panel then plays it by itself,
+        also while disconnected, until the next live picture.
+        """
+        crc = binascii.crc32(gif)
+        upload = self._stored.get(slot) != crc
+
+        async def run(session) -> None:
+            if play:
+                await session.command(playlist_command([slot]))
+            if upload:
+                await session.send_gif(gif, slot)
+
+        await self._session_call("Storing an animation", run)
+        if upload:
+            self._stored[slot] = crc
+            _LOGGER.debug("%s: stored %d bytes of animation in slot %d", self.name, len(gif), slot)
+        # the screen no longer shows the last live picture: send it again next time,
+        # and a reconnect must not cover the animation with it
+        self._last_png = self._wanted_png = None
+        self.last_screen = "animation"
+        return upload
+
+    async def async_set_playlist(self, slots: list[int]) -> None:
+        """Play these stored slots in turn (also what shows while disconnected)."""
+        await self._session_call("Setting the playlist", lambda s: s.command(playlist_command(slots)))
+        self._last_png = None
+
+    async def async_set_brightness(self, level: int) -> None:
+        """The panel's own brightness, 0-100 (pixels keep their full colour)."""
+        if self._brightness == level:
+            return
+        await self._session_call("Setting brightness", lambda s: s.command(brightness_command(level)))
+        self._brightness = level
 
     async def _ensure_connected(self) -> None:
         if self._client is not None and self._client.is_connected and self._session:
@@ -96,9 +204,15 @@ class BkLightPanel:
             disconnected_callback=self._on_disconnected,
             max_attempts=3,
         )
+        if (FAST_WRITES and self._acknowledged_writes
+                and time.monotonic() - self._acknowledged_since > ACKNOWLEDGED_MINUTES * 60):
+            _LOGGER.debug("%s: trying writes without receipts again", self.name)
+            self._acknowledged_writes = False
         mtu = getattr(self._client, "mtu_size", 23) or 23
         _LOGGER.debug("Connected to %s in %.1f s, MTU %s", self.name, time.monotonic() - started, mtu)
-        self._session = PanelSession(self._client, max_write=mtu - 3)
+        self._session = PanelSession(
+            self._client, max_write=min(mtu - 3, MAX_PIECE_BYTES), acknowledged=self._acknowledged_writes
+        )
         await self._session.start()
 
     @callback

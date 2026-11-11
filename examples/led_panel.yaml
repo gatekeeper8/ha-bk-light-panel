@@ -263,7 +263,7 @@ script:
           url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
           slots: >-
             {% set s = [] %}
-            {% if weather not in ['unknown', 'unavailable'] %}{% set s = s + ['weather'] %}{% endif %}
+            {% if weather not in ['unknown', 'unavailable'] %}{% set s = s + ['weather', 'forecast'] %}{% endif %}
             {% if url.startswith('http') %}{% set s = s + ['plane'] %}{% endif %}
             {% if states('sensor.aurora_kp_max_24h') | float(0) >= 5 %}{% set s = s + ['aurora'] %}{% endif %}
             {% if is_number(pm) and pm | float > states('input_number.led_panel_pm25_alert') | float(35) %}{% set s = s + ['smog'] %}{% endif %}
@@ -302,6 +302,15 @@ script:
                       duration: 8
                       frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
                       brightness: "{{ bright }}"
+          - conditions: "{{ slot == 'forecast' }}"
+            sequence:
+              - action: bk_light_panel.show_forecast
+                continue_on_error: true
+                data:
+                  weather: weather.forecast_home
+                  duration: 8
+                  frame_interval: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
+                  brightness: "{{ bright }}"
           - conditions: "{{ slot == 'aurora' }}"
             sequence:
               - action: bk_light_panel.show_aurora
