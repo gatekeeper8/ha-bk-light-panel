@@ -107,7 +107,7 @@ or address.
 | `bk_light_panel.show_sky_graph` | 64×16: 24 h of temperature (history + hourly forecast), day and night marked |
 | `bk_light_panel.show_room` | 64×16: a room's name, temperature and humidity |
 | `bk_light_panel.show_traffic` | 64×16: network download / upload of the last minutes, from data-rate sensors |
-| `bk_light_panel.show_retro` | 64×16: retro screens and little animations (8-bit start-up screens, aliens, a root prompt running `rm -rf /*`, a maze chomper, a runner, an agent vs a drone) |
+| `bk_light_panel.show_retro` | 64×16: retro screens and little animations (8-bit start-up screens, aliens, a root prompt running `rm -rf /*`, a maze chomper, a runner, an agent vs a drone). Played from the panel's memory: each is uploaded once to its own slot (23–29), then only the playlist switches; `mode: live` streams frames instead |
 | `bk_light_panel.play_animation` | Store an animation (built-in or your GIF) in a panel slot; the panel plays it smoothly by itself |
 | `bk_light_panel.set_playlist` | Which stored slots play in turn (also while disconnected) |
 | `bk_light_panel.set_brightness` | The panel's own brightness, 0–100 % (keeps full colour) |
@@ -173,6 +173,12 @@ they can start at their minimum values.
 
 ## Notes
 
+- **Panel slots used by the integration**: 20–22 for the safety animation (day, night,
+  black) and 23–29 for the retro screens (atari, c64, invaders, terminal, chomper,
+  runner, agent). Which GIF is in which slot is remembered across restarts (by CRC), so
+  each is uploaded only once. If you change animations with the phone app, add
+  `force: true` once. A GIF the panel does not confirm is streamed live instead and not
+  tried again for 6 hours.
 - **Stored animations**: when nothing is connected, the panel plays the animations
   saved by its phone app. The integration therefore stays connected. To be safe,
   delete the saved programs in the app once.

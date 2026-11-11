@@ -54,3 +54,7 @@ FAST_WRITES = False
 # fast mode only: misses in a row before falling back, and for how long
 UNCONFIRMED_LIMIT = 3
 ACKNOWLEDGED_MINUTES = 30
+
+# A stored animation the panel did not confirm (e.g. too big for its memory) is
+# not uploaded again for this long; the screen is streamed live meanwhile.
+UPLOAD_RETRY_HOURS = 6

@@ -452,6 +452,20 @@ show_retro:
       example: "DING DONG!"
       selector:
         text:
+    mode:
+      default: stored
+      selector:
+        select:
+          options: [stored, live]
+    slot:
+      selector:
+        number:
+          min: 1
+          max: 99
+    force:
+      default: false
+      selector:
+        boolean:
     duration:
       default: 10
       selector:
@@ -727,6 +741,10 @@ play_animation:
     tint:
       selector:
         color_rgb:
+    force:
+      default: false
+      selector:
+        boolean:
     brightness:
       default: 100
       selector:
