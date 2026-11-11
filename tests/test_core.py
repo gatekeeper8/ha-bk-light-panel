@@ -872,3 +872,33 @@ def test_safety_frames_are_calm():
             assert gif.size == size and total == stored.SAFETY_FRAMES * stored.SAFETY_FRAME_MS
     with Image.open(BytesIO(stored.safety_gif((64, 16), "black"))) as dark:
         assert dark.convert("RGB").getbbox() is None
+
+
+def test_brightness_and_background_come_back_after_a_reconnect():
+    png = render.to_png(Image.new("RGB", (64, 16), (255, 25, 0)))
+    gif = _load("stored").safety_gif((64, 16), "calm", [255, 25, 0])
+
+    async def run():
+        fake = RecordingPanel(wide=True)
+        panel_mod, panel = _connected_panel(fake)
+        real = panel_mod.BkLightPanel._ensure_connected
+        await panel.async_set_brightness(30)          # night: the panel dims, pixels stay full
+        await panel.async_set_background(gif, 21)
+        await panel.async_send_png(png)
+        # a dropped link: the real _ensure_connected forgets the panel's state
+        panel._session = None
+        panel._brightness, panel._playlist = 30, [21]
+        panel._client = None
+        if panel._wanted_brightness is not None:
+            panel._brightness = None
+        if panel._background:
+            panel._playlist = None
+        assert "self._brightness = None" in __import__("inspect").getsource(real)
+        await panel.async_send_png(render.to_png(Image.new("RGB", (64, 16), (200, 20, 0))))
+        await panel.async_set_brightness(30)          # unchanged: nothing sent
+        return fake
+
+    assert _kinds(asyncio.run(run()).frames) == [
+        "brightness 30", "playlist [21]", "gif 21", "png",
+        "playlist [21]", "brightness 30", "png",
+    ]

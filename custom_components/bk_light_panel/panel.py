@@ -358,6 +358,13 @@ class BkLightPanel:
             self._client, max_write=min(mtu - 3, MAX_PIECE_BYTES), acknowledged=self._acknowledged_writes
         )
         await self._session.start()
+        # a new connection: the panel may have been switched off and on, so its own
+        # brightness and playlist are not taken for granted; the next live picture
+        # puts back the wanted ones (_apply_state)
+        if self._wanted_brightness is not None:
+            self._brightness = None
+        if self._background:
+            self._playlist = None
 
     @callback
     def _on_disconnected(self, _client: object) -> None:

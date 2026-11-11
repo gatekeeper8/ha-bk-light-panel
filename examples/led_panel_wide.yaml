@@ -1,6 +1,6 @@
 # LED panel 2 (BK-Light 64x16 wide) - clock with date and outdoor readings
 # Package: /config/packages/led_panel_wide.yaml
-# Needs the bk_light_panel integration 0.9.0 or newer.
+# Needs the bk_light_panel integration 0.10.0 or newer.
 # Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
 #   night mode (binary_sensor.led_panel_night), clock style (flip / classic).
 # BRIGHTNESS: its own sliders "LED panel 2 - day / night brightness"; on
@@ -21,14 +21,15 @@
 #       runner, agent vs drone). Shares the big panel's
 #       helpers (ADS-B URL, plane range, PM2.5 alert limit, animation pace).
 #   :45 CLOCK again. Clock and readings slide in from the right.
-# NIGHT: red and dim, clock and readings only (no pictures).
+# NIGHT: red and dim, clock and readings only (no pictures). The red is drawn
+#   at full strength and the panel dims itself (its own brightness).
 # OFF: helper "LED panel 2 - screen off" on = black screen, still connected.
 #
 # Change LED_BLE_XXXXXXXX to your panel's name or Bluetooth address
 #   (Settings -> Devices); the address keeps working if you rename it.
 # Entities used (check the names against yours):
-#   sensor.smogomierz_temperature, sensor.smogomierz_humidity,
-#   sensor.smogomierz_pm2_5, sensor.smogomierz_pressure_sea_level,
+#   sensor.outdoor_temperature, sensor.outdoor_humidity,
+#   sensor.outdoor_pm2_5, sensor.outdoor_pressure_sea_level,
 #   weather.forecast_home, sensor.aurora_kp_max_24h (led_panel.yaml), sun.sun,
 #   switch.storage_heater_charging (storage heater relay)
 
@@ -81,8 +82,15 @@ script:
           cheap: >-
             {% set h = now().hour %}
             {{ h >= 22 or h < 6 or (wd and 13 <= h < 15) }}
-          t: "{{ states('sensor.smogomierz_temperature') }}"
-          pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+          t: "{{ states('sensor.outdoor_temperature') }}"
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
+      # night: full-strength pixels, dimmed by the panel itself (keeps the red
+      # readable); day: the panel at 100 % (sent only when it changes)
+      - action: bk_light_panel.set_brightness
+        continue_on_error: true
+        data:
+          panel: LED_BLE_XXXXXXXX
+          brightness: "{{ states('input_number.led_wide_night_brightness') | int(40) if night else 100 }}"
       - action: bk_light_panel.show_clock
         data:
           panel: LED_BLE_XXXXXXXX
@@ -103,7 +111,7 @@ script:
             {%- set v = pm | float(0) -%}
             {{ [0, 220, 90] if v < 15 else [255, 210, 0] if v < 35 else [255, 120, 0] if v < 55 else [255, 30, 30] }}
           brightness: >-
-            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
 
@@ -119,9 +127,16 @@ script:
       - variables:
           night: "{{ is_state('binary_sensor.led_panel_night', 'on') }}"
           bright: >-
-            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
+      # night: full-strength pixels, dimmed by the panel itself (keeps the red
+      # readable); day: the panel at 100 % (sent only when it changes)
+      - action: bk_light_panel.set_brightness
+        continue_on_error: true
+        data:
+          panel: LED_BLE_XXXXXXXX
+          brightness: "{{ states('input_number.led_wide_night_brightness') | int(40) if night else 100 }}"
       # every other minute the kitchen (where the panel hangs) instead
       - if: "{{ now().minute % 2 == 1 and state_attr(kitchen, 'current_temperature') is number }}"
         then:
@@ -140,14 +155,14 @@ script:
       - action: bk_light_panel.show_readings
         data:
           panel: LED_BLE_XXXXXXXX
-          temperature: "{{ states('sensor.smogomierz_temperature') }}"
-          humidity: "{{ states('sensor.smogomierz_humidity') }}"
-          pm25: "{{ states('sensor.smogomierz_pm2_5') }}"
-          pressure: "{{ states('sensor.smogomierz_pressure_sea_level') }}"
+          temperature: "{{ states('sensor.outdoor_temperature') }}"
+          humidity: "{{ states('sensor.outdoor_humidity') }}"
+          pm25: "{{ states('sensor.outdoor_pm2_5') }}"
+          pressure: "{{ states('sensor.outdoor_pressure_sea_level') }}"
           transition: slide
           tint: "{{ [255, 25, 0] if night else none }}"
           brightness: >-
-            {%- if night -%} {{ states('input_number.led_wide_night_brightness') | int(40) }}
+            {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}
             {%- endif -%}
 
@@ -157,7 +172,7 @@ script:
     max_exceeded: silent
     sequence:
       - variables:
-          pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
           weather: "{{ states('weather.forecast_home') }}"
           url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
           slots: >-
@@ -172,7 +187,7 @@ script:
             {{ s if s else ['retro'] }}
           slot: "{{ slots[states('counter.led_wide_slot') | int(0) % slots | count] }}"
           temp: >-
-            {% set t = states('sensor.smogomierz_temperature') %}
+            {% set t = states('sensor.outdoor_temperature') %}
             {% if not is_number(t) %}{% set t = state_attr('weather.forecast_home', 'temperature') %}{% endif %}
             {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
           pace: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
@@ -212,7 +227,7 @@ script:
                 data:
                   panel: LED_BLE_XXXXXXXX
                   weather: weather.forecast_home
-                  history: sensor.smogomierz_temperature
+                  history: sensor.outdoor_temperature
                   duration: 10
                   frame_interval: 1
                   brightness: "{{ bright }}"
