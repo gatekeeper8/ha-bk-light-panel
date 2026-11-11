@@ -554,7 +554,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         screen = call.data["screen"]
         if screen == "random":
             screen = random.choice(RETRO)
-        await _play(call, panel, lambda f: render_retro(screen, f, call.data.get("text")))
+        seed = random.randint(0, 1_000_000)  # e.g. a different file count each time
+        await _play(call, panel, lambda f: render_retro(screen, f, call.data.get("text"), seed))
 
     def _number(value) -> float | None:
         try:

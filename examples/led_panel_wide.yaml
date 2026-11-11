@@ -17,7 +17,8 @@
 #       sensor.wan_download exists), flight board (nearest 3 planes),
 #       aurora (Kp >= 5), smog, moon (after dark), storage heaters
 #       charging - and now and then at random a retro screen
-#       (Atari, Commodore 64, Space Invaders). Shares the big panel's
+#       or animation (8-bit start-up screens, aliens, rm -rf /*, fish chase,
+#       runner, agent vs drone). Shares the big panel's
 #       helpers (ADS-B URL, plane range, PM2.5 alert limit, animation pace).
 #   :45 CLOCK again. Clock and readings slide in from the right.
 # NIGHT: red and dim, clock and readings only (no pictures).

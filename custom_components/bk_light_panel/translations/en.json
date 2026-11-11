@@ -362,15 +362,15 @@
     },
     "show_retro": {
       "name": "Show retro screen",
-      "description": "64x16 panels: Atari READY., the Commodore 64 start-up screen or marching Space Invaders (random = one of them).",
+      "description": "64x16 panels: a retro screen or little animation: atari (blue 8-bit start-up screen), c64 (purple one), invaders (marching aliens), terminal (a root prompt running rm -rf /*), fish (a fish chase on the seabed), runner (an adventurer leaping a gap), agent (an agent fighting a drone); random = any of them.",
       "fields": {
         "screen": {
           "name": "Screen",
-          "description": "atari, c64, invaders or random."
+          "description": "One of the screens above, or random."
         },
         "text": {
           "name": "Text",
-          "description": "Atari and C64: the scrolling line; Invaders: a caption, e.g. DING DONG!"
+          "description": "atari and c64: the scrolling line; invaders: a caption, e.g. DING DONG!"
         },
         "duration": {
           "name": "Show for",

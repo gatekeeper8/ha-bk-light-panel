@@ -107,7 +107,7 @@ or address.
 | `bk_light_panel.show_sky_graph` | 64×16: 24 h of temperature (history + hourly forecast), day and night marked |
 | `bk_light_panel.show_room` | 64×16: a room's name, temperature and humidity |
 | `bk_light_panel.show_traffic` | 64×16: network download / upload of the last minutes, from data-rate sensors |
-| `bk_light_panel.show_retro` | 64×16: Atari `READY.`, Commodore 64 start-up screen, Space Invaders |
+| `bk_light_panel.show_retro` | 64×16: retro screens and little animations (8-bit start-up screens, aliens, a root prompt running `rm -rf /*`, a fish chase, a runner, an agent vs a drone) |
 | `bk_light_panel.show_image` | Your own picture file (must be in an allowed folder, e.g. `/config/www`) |
 | `bk_light_panel.fill` / `clear` | One colour / black |
 

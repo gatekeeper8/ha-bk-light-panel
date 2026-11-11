@@ -444,6 +444,10 @@ show_retro:
             - atari
             - c64
             - invaders
+            - terminal
+            - fish
+            - runner
+            - agent
     text:
       example: "DING DONG!"
       selector:

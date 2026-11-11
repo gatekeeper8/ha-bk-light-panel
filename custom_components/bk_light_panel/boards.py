@@ -16,6 +16,7 @@ from PIL import Image
 from . import font7
 from .aircraft import PLANE, _altitude_text
 from .flags import draw_flag
+from .games import GAMES, render_game
 from .gfx import Canvas, rotate
 from .render import BAR_COLORS, CHAR_GAP, _glyph, _scaled, text_width
 
@@ -322,13 +323,14 @@ def render_traffic(down: list[float], up: list[float], frame: int = 0, scale: fl
 # ------------------------------------------------------------------- retro
 ATARI_BG, ATARI_FG = (20, 50, 130), (110, 160, 255)
 C64_BORDER, C64_BG, C64_FG = (124, 112, 218), (34, 26, 96), (165, 155, 255)
+# our own jelly-like alien (three eyes, wiggling tentacles), two frames
 _INVADER = (
-    ("..#.....#..", "...#...#...", "..#######..", ".##.###.##.", "###########", "#.#######.#",
-     "#.#.....#.#", "...##.##..."),
-    ("..#.....#..", "#..#...#..#", "#.#######.#", "###.###.###", "###########", ".#########.",
-     "..#.....#..", ".#.......#."),
+    ("...#####...", "..#######..", ".##.#.#.##.", "###########", ".#########.", "..#.#.#.#..",
+     ".#.#...#.#.", "#.........#"),
+    ("...#####...", "..#######..", ".##.#.#.##.", "###########", ".#########.", "..#.#.#.#..",
+     "..#.#.#.#..", ".#.......#."),
 )
-RETRO = ("atari", "c64", "invaders")
+RETRO = ("atari", "c64", "invaders", *GAMES)
 
 
 def _atari(frame: int, text: str | None) -> Image.Image:
@@ -342,7 +344,7 @@ def _atari(frame: int, text: str | None) -> Image.Image:
                 for y in range(9, 16):
                     pixels[x, y] = ATARI_FG
         return image
-    banner = _strip(text or "READY. ATARI 65XE · 64K RAM · ", ATARI_FG, ATARI_BG)
+    banner = _strip(text or "READY. 8-BIT HOME COMPUTER · 64K RAM · ", ATARI_FG, ATARI_BG)
     return _scrolled(banner, (phase - 10) * 4, ATARI_BG)
 
 
@@ -352,7 +354,7 @@ def _c64(frame: int, text: str | None) -> Image.Image:
     image.paste(inner, (2, 1))
     pixels = image.load()
     # the start-up line scrolls along the top in the small font
-    boot = text or "**** COMMODORE 64 BASIC V2 **** 64K RAM SYSTEM 38911 BASIC BYTES FREE ****"
+    boot = text or "**** 8-BIT BASIC **** 64K RAM SYSTEM **** READY TO PLAY ****"
     width = text_width(boot) + 20
     offset = (frame * 4) % width
     x = 3 - offset
@@ -396,6 +398,9 @@ def _invaders(frame: int, text: str | None) -> Image.Image:
     return image
 
 
-def render_retro(name: str, frame: int = 0, text: str | None = None) -> Image.Image:
-    """atari (READY. + banner), c64 (start-up screen), invaders (marching, optional caption)."""
+def render_retro(name: str, frame: int = 0, text: str | None = None, seed: int = 0) -> Image.Image:
+    """Blue (atari) or purple (c64) 8-bit start-up screen, marching aliens (invaders,
+    optional caption), or one of the games: terminal, fish, runner, agent."""
+    if name in GAMES:
+        return render_game(name, frame, seed)
     return {"atari": _atari, "c64": _c64, "invaders": _invaders}.get(name, _invaders)(frame, text)

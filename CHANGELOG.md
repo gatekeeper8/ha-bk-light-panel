@@ -26,8 +26,10 @@
 - New 64×16 screens: `show_sky_graph` (24 h temperature from history and the hourly
   forecast, day warm with a sun, night blue with stars), `show_room` (a room's
   temperature and humidity or set point, with a steaming pot), `show_traffic` (network download / upload of the last
-  minutes from history, e.g. SNMP sensors of a router), `show_retro` (Atari `READY.`,
-  Commodore 64 start-up screen, Space Invaders). On 64×16 the nearest plane becomes a
+  minutes from history, e.g. SNMP sensors of a router), `show_retro` (blue and purple
+  8-bit start-up screens, marching aliens, and four game-style animations: a root
+  prompt running `rm -rf /*`, a hungry fish chased by a shark, an adventurer leaping
+  a gap, an agent fighting a drone; all original pixel art). On 64×16 the nearest plane becomes a
   flight board showing the nearest planes in turn (`count`). 64×16 flip cards are 15
   pixels wide, with the digits centred between the pins.
 - Example package `examples/led_panel_wide.yaml`: a 64×16 panel as a second clock with

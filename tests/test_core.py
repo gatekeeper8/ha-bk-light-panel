@@ -601,3 +601,15 @@ def test_date_clock_rows_line_up():
         return [y for y in range(16) if any(max(px[x, y]) > 100 for x in range(x0, x1))]
 
     assert rows(2, 30) == rows(33, 64) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]
+
+
+def test_games():
+    _load_all()
+    games = _load("games")
+    for name in games.GAMES:
+        for f in range(0, 50, 7):
+            image = games.render_game(name, f, seed=3)
+            assert image.size == (64, 16) and image.getbbox() is not None
+    # the terminal ends with a file count
+    last = games.render_terminal(games.terminal_frames(3) - 2, 3)
+    assert last.getbbox() is not None
