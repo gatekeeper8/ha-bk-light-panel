@@ -603,7 +603,16 @@ def test_date_clock_rows_line_up():
     def rows(x0, x1):
         return [y for y in range(16) if any(max(px[x, y]) > 100 for x in range(x0, x1))]
 
-    assert rows(2, 30) == rows(33, 64) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]
+    # time 1-7 and date 11-15 on the left; temperature 2-6 (level with the
+    # time, in the date's font) and PM 11-15 on the right
+    assert rows(2, 30) == [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15]
+    assert rows(33, 64) == [2, 3, 4, 5, 6, 11, 12, 13, 14, 15]
+
+    def first_column(y0, y1):
+        return min(x for x in range(32, 64) for y in range(y0, y1) if max(px[x, y]) > 100)
+
+    # both lines start at the same column
+    assert first_column(2, 7) == first_column(11, 16)
 
 
 def test_games():

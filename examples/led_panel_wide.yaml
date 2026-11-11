@@ -1,6 +1,6 @@
 # LED panel 2 (BK-Light 64x16 wide) - clock with date and outdoor readings
 # Package: /config/packages/led_panel_wide.yaml
-# Needs the bk_light_panel integration 0.10.0 or newer.
+# Needs the bk_light_panel integration 0.10.1 or newer.
 # Works next to led_panel.yaml (the 32x32 panel) and shares its helpers:
 #   night mode (binary_sensor.led_panel_night), clock style (flip / classic).
 # BRIGHTNESS: its own sliders "LED panel 2 - day / night brightness"; on
@@ -8,7 +8,9 @@
 #
 # Every minute (day):
 #   :00 CLOCK - flip cards at the top, day and date in Polish under them,
-#       outdoor temperature and PM2.5 on the right; tariff colour on the hinges
+#       outdoor temperature and PM2.5 on the right in the same small font
+#       (temperature on a blue-yellow-red scale, PM2.5 by the EU air quality
+#       index: green / yellow / red); tariff colour on the hinges
 #   :15 READINGS - temperature, humidity, PM2.5, pressure, coloured by level
 #   :15 every other minute the KITCHEN instead (where the panel hangs)
 #   :30 PICTURE for 10-12 s, in turn: weather + temperature, forecast
@@ -103,13 +105,32 @@ script:
           date_color: [255, 190, 110]
           # outdoor temperature and PM2.5 on the right, coloured by level
           line1: "{{ (t | float | round(1) ~ '°') if is_number(t) else '--°' }}"
+          # temperature: a smooth scale from violet-blue (frost) through cyan,
+          # green and yellow to orange and red (heat); grey when unknown
           line1_color: >-
-            {%- set v = t | float(10) -%}
-            {{ [110, 170, 255] if v < 0 else [190, 225, 255] if v < 10 else [255, 235, 170] if v < 20 else [255, 170, 60] }}
+            {%- set v = t | float(0) -%}
+            {%- set stops = [[-20, 120, 70, 255], [-10, 50, 110, 255], [-4, 40, 170, 255],
+                             [1, 110, 230, 255], [7, 90, 255, 200], [12, 170, 255, 90],
+                             [17, 255, 245, 40], [22, 255, 200, 20], [26, 255, 140, 0],
+                             [30, 255, 70, 10], [35, 255, 0, 50]] -%}
+            {%- set ns = namespace(c=stops[0][1:]) -%}
+            {%- for i in range(stops | count - 1) -%}
+              {%- set a = stops[i] -%}{%- set b = stops[i + 1] -%}
+              {%- if v >= a[0] -%}
+                {%- set f = [1, (v - a[0]) / (b[0] - a[0])] | min -%}
+                {%- set ns.c = [(a[1] + (b[1] - a[1]) * f) | round | int,
+                                (a[2] + (b[2] - a[2]) * f) | round | int,
+                                (a[3] + (b[3] - a[3]) * f) | round | int] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.c if is_number(t) else [120, 120, 120] }}
           line2: "PM {{ pm | float | round(0) | int if is_number(pm) else '--' }}"
+          # PM2.5 by the European Air Quality Index (EEA, hourly): good / fair
+          # (up to 15) green, moderate (16-50) yellow, poor and worse (51+) red
           line2_color: >-
             {%- set v = pm | float(0) -%}
-            {{ [0, 220, 90] if v < 15 else [255, 210, 0] if v < 35 else [255, 120, 0] if v < 55 else [255, 30, 30] }}
+            {{ [120, 120, 120] if not is_number(pm) else [0, 230, 80] if v <= 15
+               else [255, 215, 0] if v <= 50 else [255, 25, 25] }}
           brightness: >-
             {%- if night -%} 100
             {%- else -%} {{ states('input_number.led_wide_day_brightness') | int(60) }}

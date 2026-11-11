@@ -20,7 +20,6 @@ from .flags import draw_flag
 from .gfx import Canvas, curve, rotate
 from .icons import CHARGING, SEASON_NAMES, SEASONS, language_for, season_for, moon_name, moon_phase, render_icon
 from .render import (
-    _BIG,
     BAR_COLORS,
     CHAR_GAP,
     _color,
@@ -66,10 +65,10 @@ def _blank() -> Image.Image:
     return Image.new("RGB", SIZE, (0, 0, 0))
 
 
-def _text(pixels, text: str, x0: int, x1: int, y: int, color: RGB) -> None:
-    """Small 3x5 text centred between x0 and x1 (clipped to the panel)."""
+def _text(pixels, text: str, x0: int, x1: int, y: int, color: RGB, centred: bool = True) -> None:
+    """Small 3x5 text centred between x0 and x1, or starting at x0 (clipped to the panel)."""
     text = text.translate(_FOLD)
-    x = x0 + (x1 - x0 - text_width(text)) // 2
+    x = x0 + (x1 - x0 - text_width(text)) // 2 if centred else x0
     for char in text:
         rows = _glyph(char)
         for ry, row in enumerate(rows):
@@ -85,30 +84,6 @@ def _big(pixels, text: str, x0: int, x1: int, y: int, color: RGB) -> None:
         font7.draw(pixels, text, x0 + (x1 - x0 - font7.width(text)) // 2, y, color, (x0, x1))
     else:
         _text(pixels, text, x0, x1, y + 1, color)
-
-
-# the clock's 5x7 digits plus what a temperature needs
-_CLOCK_GLYPHS = {**_BIG,
-                 ".": (".", ".", ".", ".", ".", ".", "#"),
-                 "°": (".#.", "#.#", ".#.", "...", "...", "...", "...")}
-
-
-def _clock_digits(pixels, text: str, x0: int, x1: int, y: int, color: RGB) -> bool:
-    """Text in the clock's own digits, centred; False if a character is missing."""
-    if not all(ch in _CLOCK_GLYPHS for ch in text):
-        return False
-    width = sum(len(_CLOCK_GLYPHS[ch][0]) for ch in text) + len(text) - 1
-    if width > x1 - x0:
-        return False
-    x = x0 + (x1 - x0 - width) // 2
-    for ch in text:
-        rows = _CLOCK_GLYPHS[ch]
-        for ry, row in enumerate(rows):
-            for rx, pixel in enumerate(row):
-                if pixel == "#":
-                    pixels[x + rx, y + ry] = color
-        x += len(rows[0]) + 1
-    return True
 
 
 def _two_lines(pixels, lines: list[tuple[str, RGB]], x0: int, x1: int) -> None:
@@ -162,13 +137,17 @@ def render_clock_wide(
             image.paste(face.crop((0, 1, 32, 10)), (0, 0))  # digits at y 1..7
         pixels = image.load()
         _text(pixels, date_text, 0, 32, 11, _color(date_color, (255, 190, 110)))
-        # right side in the same sizes and rows: line 1 in the clock's digits
-        # (y 1-7, level with the time), line 2 in the date's small font (y 11)
-        color1 = _color(line1_color, (255, 190, 110))
-        if line1 and not _clock_digits(pixels, line1, 32, 64, 1, color1):
-            _big(pixels, line1, 32, 64, 1, color1)
-        if line2:
-            _text(pixels, line2, 32, 64, 11, _color(line2_color, (200, 200, 200)))
+        # right side: every text in the date's font and size. Line 1 sits level
+        # with the clock digits (y 2-6), line 2 level with the date (y 11-15);
+        # both start at the same column, the pair centred in the right half.
+        lines = [(t.translate(_FOLD), c, y) for t, c, y in (
+            (line1, _color(line1_color, (255, 190, 110)), 2),
+            (line2, _color(line2_color, (200, 200, 200)), 11)) if t]
+        if lines:
+            block = max(text_width(t) for t, _, _ in lines)
+            x0 = 32 + max(0, (32 - block) // 2)
+            for text, color, y in lines:
+                _text(pixels, text, x0, 64, y, color, centred=False)
         return image
     elif style == "flip":
         face = render_flip_clock(time_text, previous, step, time_color, geometry=FLIP_CARDS)

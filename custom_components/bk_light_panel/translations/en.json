@@ -218,7 +218,7 @@
         },
         "date_text": {
           "name": "Date line",
-          "description": "64x16 panels: the clock moves up and this line goes under it, e.g. PON 9.11."
+          "description": "64x16 panels: the clock moves up and this line goes under it, e.g. PON 9.11. Line 1 and line 2 then go beside it in the same small font: line 1 level with the time, line 2 level with the date."
         },
         "date_color": {
           "name": "Date colour",
