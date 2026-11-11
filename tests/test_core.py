@@ -656,3 +656,16 @@ def test_store_gif_and_commands():
     assert fake.frame[2] == 0x04  # the last command: brightness
     with PILImage.open(__import__("io").BytesIO(gif)) as image:
         assert image.size == (64, 16) and image.n_frames == 4
+
+
+def test_runner_ledge_is_dark_and_warm():
+    """The ledge looked almost white-pink on the panel: keep it dark red-brown."""
+    _load_all()
+    games = _load("games")
+    image = games.render_runner(0)
+    px = image.load()
+    ledge = [px[x, y] for x in range(64) if not 12 <= x < 32  # not under the runner
+             for y in (13, 14, 15) if px[x, y][0] > px[x, y][2]]  # not the sky in the gap
+    assert len(ledge) > 60
+    for r, g, b in ledge:
+        assert max(r, g, b) <= 160 and r > g > b
