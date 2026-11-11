@@ -779,3 +779,26 @@ set_brightness:
     panel:
       selector:
         text:
+
+set_safety_animation:
+  fields:
+    style:
+      default: calm
+      selector:
+        select:
+          options: [calm, black]
+    tint:
+      selector:
+        color_rgb:
+    slot:
+      selector:
+        number:
+          min: 1
+          max: 99
+    force:
+      default: false
+      selector:
+        boolean:
+    panel:
+      selector:
+        text:

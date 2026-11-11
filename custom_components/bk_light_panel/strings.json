@@ -639,6 +639,32 @@
           "description": "Name or Bluetooth address; only needed with several panels."
         }
       }
+    },
+    "set_safety_animation": {
+      "name": "Set safety animation",
+      "description": "Stores a calm animation in the panel and puts it in its playlist, so a dropped connection shows it instead of the phone app's animations. Uploaded only when the slot does not already hold it; the live picture is sent again straight away.",
+      "fields": {
+        "style": {
+          "name": "Style",
+          "description": "calm: a slowly breathing ember with a few stars; black: a dark screen (e.g. while the display is switched off)."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour, e.g. red at night."
+        },
+        "slot": {
+          "name": "Slot",
+          "description": "Default: 20 (calm), 21 (calm with a tint), 22 (black)."
+        },
+        "force": {
+          "name": "Upload again",
+          "description": "Upload even if the slot should already hold it."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
     }
   }
 }

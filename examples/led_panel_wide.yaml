@@ -354,3 +354,28 @@ automation:
               entity_id: input_number.led_wide_night_brightness
             data:
               value: "{{ states('input_number.led_panel_night_brightness') | float(40) }}"
+
+  # safety animation: the panel plays it if the connection drops (instead of
+  # the phone app's animations). Calm by day, red at night, black while the
+  # screen is switched off. Uploaded once per variant, afterwards only switched.
+  - id: led_wide_safety_animation
+    alias: LED panel 2 - safety animation
+    mode: restart
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: automation_reloaded
+      - trigger: state
+        entity_id:
+          - binary_sensor.led_panel_night
+          - input_boolean.led_wide_screen_off
+    actions:
+      - delay:
+          seconds: 30  # after a restart, give Bluetooth time to find the panel
+      - action: bk_light_panel.set_safety_animation
+        continue_on_error: true
+        data:
+          panel: LED_BLE_XXXXXXXX
+          style: "{{ 'black' if is_state('input_boolean.led_wide_screen_off', 'on') else 'calm' }}"
+          tint: "{{ [255, 25, 0] if is_state('binary_sensor.led_panel_night', 'on') else none }}"

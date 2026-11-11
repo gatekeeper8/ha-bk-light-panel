@@ -830,3 +830,45 @@ def test_retro_gifs_are_stable_and_small():
         assert len(gif) < 32_000
         with Image.open(BytesIO(gif)) as image:
             assert image.size == (64, 16) and image.n_frames == stored.retro_timing(name)[0]
+
+
+def test_safety_animation_becomes_the_background():
+    stored = _load("stored")
+    gif = stored.safety_gif((32, 32), "calm")
+    png = render.to_png(Image.new("RGB", (32, 32), (40, 0, 0)))
+
+    async def run():
+        fake = RecordingPanel()
+        _, panel = _connected_panel(fake)
+        await panel.async_send_png(png)
+        assert await panel.async_set_background(gif, 20) is True
+        assert await panel.async_set_background(gif, 20) is False  # same CRC: playlist only
+        await panel.async_play_stored(stored.retro_gif("agent"), 29)
+        await panel.async_send_png(png)
+        return fake
+
+    assert _kinds(asyncio.run(run()).frames) == [
+        "png",
+        "playlist [20]", "gif 20", "png",        # live picture back straight away
+        "playlist [20]", "png",
+        "playlist [29]", "gif 29",
+        "playlist [20]", "png",                  # after an animation: background again
+    ]
+
+
+def test_safety_frames_are_calm():
+    stored = _load("stored")
+    for size in ((32, 32), (64, 16)):
+        first = stored.render_safety(size, 0)
+        peak = stored.render_safety(size, stored.SAFETY_FRAMES // 2)
+        ember = lambda im: max(sum(p) for p in [im.getpixel((size[0] // 2, size[1] // 2))])
+        assert ember(first) < 60 < ember(peak)       # starts dark, so a switch does not flash
+        assert max(max(p) for p in peak.get_flattened_data()) <= 220  # never glaring
+        with Image.open(BytesIO(stored.safety_gif(size))) as gif:
+            total = 0
+            for i in range(gif.n_frames):  # identical neighbours may be merged: count time
+                gif.seek(i)
+                total += gif.info["duration"]
+            assert gif.size == size and total == stored.SAFETY_FRAMES * stored.SAFETY_FRAME_MS
+    with Image.open(BytesIO(stored.safety_gif((64, 16), "black"))) as dark:
+        assert dark.convert("RGB").getbbox() is None

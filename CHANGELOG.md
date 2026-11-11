@@ -1,6 +1,14 @@
 # Changelog
 
 ## 0.10.0 (unreleased)
+- **Safety animation**: new action `set_safety_animation` stores a calm animation (a
+  slowly breathing ember with a few stars, both panel sizes) and makes it the panel's
+  playlist, so a dropped connection shows it instead of the phone app's programs.
+  `tint` (e.g. red at night) and `style: black` (screen switched off) get their own
+  slots (20 / 21 / 22), so switching between them costs only a playlist command. The
+  live picture is sent again straight away; each loop starts dark, so the moment the
+  panel switches does not flash. Both example packages keep it in step with night mode
+  and the screen-off switch.
 - **Retro screens from the panel's own memory**: `show_retro` uploads each built-in
   animation once to its own slot (atari 23 … agent 29), then only switches the
   playlist, so the panel animates smoothly with no Bluetooth traffic. Uploads are

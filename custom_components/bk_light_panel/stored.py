@@ -7,6 +7,8 @@ slot, and afterwards only the playlist is switched. No Home Assistant imports.
 
 from __future__ import annotations
 
+import math
+
 from PIL import Image
 
 from .boards import RETRO, render_retro
@@ -53,3 +55,55 @@ def retro_gif(name: str, text: str | None = None, tint=None) -> bytes:
     """A built-in 64x16 animation as a looping GIF, always the same bytes for the same input."""
     frames, frame_ms = retro_frames(name, text)
     return to_gif([apply_tint(frame, tint) for frame in frames], frame_ms)
+
+
+# ------------------------------------------------------------ safety
+SAFETY_FRAMES, SAFETY_FRAME_MS = 32, 160  # one slow breath every ~5 s
+_EMBER_CORE, _EMBER_EDGE = (255, 160, 70), (190, 55, 8)  # warm, never near white
+
+
+def render_safety(size: tuple[int, int], frame: int, frames: int = SAFETY_FRAMES) -> Image.Image:
+    """A calm ember breathing in the middle, a few stars twinkling slowly.
+
+    Frame 0 is the darkest, so the moment the panel switches to this
+    animation (just before a live picture replaces it) shows almost nothing.
+    """
+    w, h = size
+    breath = (1 - math.cos(2 * math.pi * frame / frames)) / 2  # 0 .. 1 .. 0
+    level = 0.05 + 0.75 * breath  # calm: never full strength
+    cx, cy = (w - 1) / 2, (h - 1) / 2
+    radius = min(w, h) * ((0.15 if w == h else 0.20) + 0.05 * breath)
+    image = Image.new("RGB", size)
+    px = image.load()
+    for y in range(h):
+        for x in range(w):
+            d = math.hypot(x - cx, y - cy) / radius
+            glow = math.exp(-d * d) * level
+            if glow < 0.02:
+                continue
+            k = min(1.0, d / 1.6)  # warm white core fading to deep orange
+            color = tuple(c + (e - c) * k for c, e in zip(_EMBER_CORE, _EMBER_EDGE))
+            px[x, y] = tuple(round(v * glow) for v in color)
+    # stars: fixed places away from the ember, each on its own slow beat
+    for i in range(7 if w > h else 6):
+        sx = round((i * 37 + 5) % w)
+        sy = round((i * 23 + 3) % h)
+        if math.hypot(sx - cx, sy - cy) < radius * 1.8:
+            continue
+        twinkle = (1 + math.sin(2 * math.pi * (frame / frames * (1 + i % 2)) + i * 1.9)) / 2
+        v = round(70 + 110 * twinkle)
+        px[sx, sy] = (v, v, min(255, v + 30))
+    return image
+
+
+def safety_gif(size: tuple[int, int], style: str = "calm", tint=None) -> bytes:
+    """The animation the panel plays while nothing is connected.
+
+    calm: the breathing ember (tint e.g. red for night); black: a dark screen,
+    for when the display is switched off.
+    """
+    if style == "black":
+        frames = [Image.new("RGB", size)] * 2
+        return to_gif(frames, 1000, colors=2)
+    frames = [apply_tint(render_safety(size, f), tint) for f in range(SAFETY_FRAMES)]
+    return to_gif(frames, SAFETY_FRAME_MS)
