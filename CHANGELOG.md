@@ -7,6 +7,12 @@
 - Example 64x16 package: the temperature is coloured on a smooth scale from violet-blue
   (frost) through cyan, green and yellow to orange and red; PM2.5 by the European Air
   Quality Index bands (EEA, hourly): green up to 15, yellow 16-50, red from 51 µg/m³.
+- Example 64x16 package: your own 64x16 GIF in the picture rotation (helper "LED panel 2 -
+  own GIF", stored in slot 3, uploaded once).
+- README: new pictures of the 64x16 screens, the clock colour scales and the stored
+  animations (safety ember, terminal, chomper, runner, agent).
+- No personal data in examples, docs or tests: the example receiver address is
+  `adsb-receiver.local`, the tests use positions around Amsterdam.
 
 ## 0.10.0
 - **Night mode with the panel's own brightness**: the example packages draw the red

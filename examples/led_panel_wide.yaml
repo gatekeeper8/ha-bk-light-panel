@@ -20,7 +20,9 @@
 #       aurora (Kp >= 5), smog, moon (after dark), storage heaters
 #       charging - and now and then at random a retro screen
 #       or animation (8-bit start-up screens, aliens, rm -rf /*, maze chomper,
-#       runner, agent vs drone). Shares the big panel's
+#       runner, agent vs drone), played smoothly from the panel's own memory -
+#       and your own GIF (helper "LED panel 2 - own GIF", e.g.
+#       /config/www/my_animation.gif, 64x16; empty = left out). Shares the big panel's
 #       helpers (ADS-B URL, plane range, PM2.5 alert limit, animation pace).
 #   :45 CLOCK again. Clock and readings slide in from the right.
 # NIGHT: red and dim, clock and readings only (no pictures). The red is drawn
@@ -60,6 +62,14 @@ input_number:
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:brightness-4
+
+input_text:
+  # your own animation in the picture rotation: path of a 64x16 GIF in
+  # /config/www (up to 60 frames, few colours). Empty = left out.
+  led_wide_own_gif:
+    name: LED panel 2 - own GIF
+    max: 255
+    icon: mdi:file-gif-box
 
 counter:
   led_wide_slot:
@@ -196,11 +206,13 @@ script:
           pm: "{{ states('sensor.outdoor_pm2_5') }}"
           weather: "{{ states('weather.forecast_home') }}"
           url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
+          own_gif: "{{ states('input_text.led_wide_own_gif') | trim }}"
           slots: >-
             {% set s = [] %}
             {% if weather not in ['unknown', 'unavailable'] %}{% set s = s + ['weather', 'forecast', 'sky'] %}{% endif %}
             {% if states('sensor.wan_download') not in ['unknown', 'unavailable'] %}{% set s = s + ['traffic'] %}{% endif %}
             {% if url.startswith('http') %}{% set s = s + ['plane'] %}{% endif %}
+            {% if own_gif.startswith('/') %}{% set s = s + ['own'] %}{% endif %}
             {% if states('sensor.aurora_kp_max_24h') | float(0) >= 5 %}{% set s = s + ['aurora'] %}{% endif %}
             {% if is_number(pm) and pm | float > states('input_number.led_panel_pm25_alert') | float(35) %}{% set s = s + ['smog'] %}{% endif %}
             {% if is_state('sun.sun', 'below_horizon') %}{% set s = s + ['moon'] %}{% endif %}
@@ -289,6 +301,18 @@ script:
                       duration: 10
                       frame_interval: "{{ pace }}"
                       brightness: "{{ bright }}"
+          # your own GIF: stored in slot 3 (uploaded once, afterwards only
+          # switched); the panel plays it until the clock takes over at :45
+          - conditions: "{{ slot == 'own' }}"
+            sequence:
+              - action: bk_light_panel.play_animation
+                continue_on_error: true
+                data:
+                  panel: LED_BLE_XXXXXXXX
+                  file: "{{ own_gif }}"
+                  slot: 3
+                  frames: 60
+                  brightness: "{{ bright }}"
           - conditions: "{{ slot == 'aurora' }}"
             sequence:
               - action: bk_light_panel.show_aurora
