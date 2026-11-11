@@ -28,8 +28,8 @@
 # Change LED_BLE_XXXXXXXX to your panel's name or Bluetooth address
 #   (Settings -> Devices); the address keeps working if you rename it.
 # Entities used (check the names against yours):
-#   sensor.smogomierz_temperature, sensor.smogomierz_humidity,
-#   sensor.smogomierz_pm2_5, sensor.smogomierz_pressure_sea_level,
+#   sensor.outdoor_temperature, sensor.outdoor_humidity,
+#   sensor.outdoor_pm2_5, sensor.outdoor_pressure_sea_level,
 #   weather.forecast_home, sensor.aurora_kp_max_24h (led_panel.yaml), sun.sun,
 #   switch.storage_heater_charging (storage heater relay)
 
@@ -82,8 +82,8 @@ script:
           cheap: >-
             {% set h = now().hour %}
             {{ h >= 22 or h < 6 or (wd and 13 <= h < 15) }}
-          t: "{{ states('sensor.smogomierz_temperature') }}"
-          pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+          t: "{{ states('sensor.outdoor_temperature') }}"
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
       # night: full-strength pixels, dimmed by the panel itself (keeps the red
       # readable); day: the panel at 100 % (sent only when it changes)
       - action: bk_light_panel.set_brightness
@@ -155,10 +155,10 @@ script:
       - action: bk_light_panel.show_readings
         data:
           panel: LED_BLE_XXXXXXXX
-          temperature: "{{ states('sensor.smogomierz_temperature') }}"
-          humidity: "{{ states('sensor.smogomierz_humidity') }}"
-          pm25: "{{ states('sensor.smogomierz_pm2_5') }}"
-          pressure: "{{ states('sensor.smogomierz_pressure_sea_level') }}"
+          temperature: "{{ states('sensor.outdoor_temperature') }}"
+          humidity: "{{ states('sensor.outdoor_humidity') }}"
+          pm25: "{{ states('sensor.outdoor_pm2_5') }}"
+          pressure: "{{ states('sensor.outdoor_pressure_sea_level') }}"
           transition: slide
           tint: "{{ [255, 25, 0] if night else none }}"
           brightness: >-
@@ -172,7 +172,7 @@ script:
     max_exceeded: silent
     sequence:
       - variables:
-          pm: "{{ states('sensor.smogomierz_pm2_5') }}"
+          pm: "{{ states('sensor.outdoor_pm2_5') }}"
           weather: "{{ states('weather.forecast_home') }}"
           url: "{{ states('input_text.led_panel_adsb_url') | trim }}"
           slots: >-
@@ -187,7 +187,7 @@ script:
             {{ s if s else ['retro'] }}
           slot: "{{ slots[states('counter.led_wide_slot') | int(0) % slots | count] }}"
           temp: >-
-            {% set t = states('sensor.smogomierz_temperature') %}
+            {% set t = states('sensor.outdoor_temperature') %}
             {% if not is_number(t) %}{% set t = state_attr('weather.forecast_home', 'temperature') %}{% endif %}
             {{ (t | float | round(0) | int ~ '°C') if is_number(t) else '' }}
           pace: "{{ {'calm (1.5 s)': 1.5, 'slow (2.5 s)': 2.5, 'smooth (0.8 s)': 0.8, 'still': 0}.get(states('input_select.led_panel_animation'), 1.5) }}"
@@ -227,7 +227,7 @@ script:
                 data:
                   panel: LED_BLE_XXXXXXXX
                   weather: weather.forecast_home
-                  history: sensor.smogomierz_temperature
+                  history: sensor.outdoor_temperature
                   duration: 10
                   frame_interval: 1
                   brightness: "{{ bright }}"
