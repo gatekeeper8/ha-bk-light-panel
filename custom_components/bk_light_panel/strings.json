@@ -362,7 +362,7 @@
     },
     "show_retro": {
       "name": "Show retro screen",
-      "description": "64x16 panels: a retro screen or little animation: atari (blue 8-bit start-up screen), c64 (purple one), invaders (marching aliens), terminal (a root prompt running rm -rf /*), fish (a fish chase on the seabed), runner (an adventurer leaping a gap), agent (an agent fighting a drone); random = any of them.",
+      "description": "64x16 panels: a retro screen or little animation: atari (blue 8-bit start-up screen), c64 (purple one), invaders (marching aliens), terminal (a root prompt running rm -rf /*), chomper (a green monster munching gems in a maze, a bat behind), runner (an adventurer leaping a gap), agent (an agent fighting a drone); random = any of them.",
       "fields": {
         "screen": {
           "name": "Screen",

@@ -28,8 +28,9 @@
   temperature and humidity or set point, with a steaming pot), `show_traffic` (network download / upload of the last
   minutes from history, e.g. SNMP sensors of a router), `show_retro` (blue and purple
   8-bit start-up screens, marching aliens, and four game-style animations: a root
-  prompt running `rm -rf /*`, a hungry fish chased by a shark, an adventurer leaping
-  a gap, an agent fighting a drone; all original pixel art). On 64×16 the nearest plane becomes a
+  prompt running `rm -rf /*`, a green chomper munching gems in a maze chased by a bat,
+  an adventurer long-jumping a gap and an agent fighting a drone, drawn with
+  jointed, shaded figures and copper-gradient skies; all original designs). On 64×16 the nearest plane becomes a
   flight board showing the nearest planes in turn (`count`). 64×16 flip cards are 15
   pixels wide, with the digits centred between the pins.
 - Example package `examples/led_panel_wide.yaml`: a 64×16 panel as a second clock with

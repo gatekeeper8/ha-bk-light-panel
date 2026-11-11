@@ -1,7 +1,7 @@
 """Little game-style animations for the wide 64x16 panel, all original designs.
 
 terminal: a root prompt types rm -rf /* and reports the files it deleted
-fish:     a hungry fish chases a worm along the seabed, a shark behind it
+chomper:  a round green monster munches gems in a maze corridor, a bat behind
 runner:   an adventurer runs along a castle ledge and long-jumps a gap
 agent:    an agent shoots at a hovering drone and crouches under its fire
 
@@ -14,14 +14,14 @@ from __future__ import annotations
 import math
 import random
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from .gfx import Canvas
 from .render import CHAR_GAP, _glyph
 
 W, H = 64, 16
 RGB = tuple[int, int, int]
-GAMES = ("terminal", "fish", "runner", "agent")
+GAMES = ("terminal", "chomper", "runner", "agent")
 
 
 def _blank(bg: RGB = (0, 0, 0)) -> Image.Image:
@@ -85,182 +85,294 @@ def terminal_frames(seed: int = 0) -> int:
     return len("RM -RF /*") + 2 + len(_PATHS) + 6
 
 
-# -------------------------------------------------------------------- fish
-def _fish(c: Canvas, x: float, y: float, frame: int) -> None:
-    """Orange fish facing right, 13 pixels high, tail flapping, mouth opening."""
-    body = c.poly_mask([(x + 6.8 * math.cos(a / 24 * 2 * math.pi), y + 6.3 * math.sin(a / 24 * 2 * math.pi))
-                        for a in range(24)])
-    flap = math.sin(frame * 1.6) * 2.2
-    tail = c.poly_mask([(x - 4.5, y), (x - 11.5, y - 5.5 + flap), (x - 11.0, y + 5.5 + flap)])
-    c.paint(c.vgrad((255, 170, 40), (220, 80, 20), y - 6, y + 6), tail)
-    c.paint(c.vgrad((255, 190, 60), (230, 90, 20), y - 6, y + 6), body)
-    fin = c.poly_mask([(x - 2.5, y - 4.8), (x + 2.5, y - 4.8), (x - 3.5, y - 7.5)])
-    c.paint((255, 120, 30), fin)
-    for k in (-1.5, 1.0):  # stripes
-        c.paint((255, 245, 230), c.rrect_mask((x + k - 0.6, y - 4.8, x + k + 0.6, y + 4.8), 0.5), 0.85)
-    c.paint((20, 20, 30), c.circle_mask(x + 3.0, y - 1.6, 1.0))
-    c.paint((255, 255, 255), c.circle_mask(x + 3.3, y - 1.9, 0.35))
-    gape = 1.2 + 1.2 * (0.5 + 0.5 * math.sin(frame * 2.1))
-    c.paint((10, 20, 60), c.poly_mask([(x + 6.6, y + 0.8 - gape), (x + 6.6, y + 0.8 + gape), (x + 3.8, y + 0.8)]))
+# --------------------------------------------------------- jointed figures
+# Figures are drawn from limbs at joint angles (degrees from straight down,
+# positive = forwards/right), 4x supersampled and shaded: smooth, Amiga-style
+# motion instead of blocky sprites. Back limbs are darker for depth.
+_LIMB = {"thigh": 3.4, "shin": 3.4, "upper": 2.7, "fore": 2.5, "torso": 4.6}
 
 
-def _shark(c: Canvas, x: float, y: float, frame: int) -> None:
-    """Grey shark facing right with a fin and teeth, a bit smaller than the fish."""
-    c.paint(c.vgrad((150, 160, 175), (95, 105, 120), y - 4, y + 4),
-            c.poly_mask([(x + 7.0, y + 0.5), (x + 2.0, y - 3.8), (x - 6.0, y - 2.5), (x - 6.0, y + 2.5), (x + 2.0, y + 3.6)]))
-    c.paint((120, 130, 145), c.poly_mask([(x - 1.0, y - 3.4), (x + 2.2, y - 3.4), (x - 1.5, y - 7.0)]))
-    swish = math.sin(frame * 1.4) * 1.8
-    c.paint((110, 120, 135), c.poly_mask([(x - 5.5, y), (x - 10.0, y - 4.0 + swish), (x - 9.5, y + 3.5 + swish)]))
-    c.paint((235, 235, 240), c.poly_mask([(x + 6.5, y + 0.6), (x + 2.5, y + 1.4), (x + 6.0, y + 1.6)]))
-    c.paint((255, 60, 50), c.circle_mask(x + 3.2, y - 1.4, 0.65))
+def _darker(color: RGB, k: float = 0.72) -> RGB:
+    return tuple(int(v * k) for v in color)  # type: ignore[return-value]
 
 
-def render_fish(frame: int) -> Image.Image:
-    """Seabed board at the bottom; a fish chases a worm, a shark chases the fish."""
-    image = _blank((0, 10, 35))
-    c = Canvas()
-    worm_x = 63 - (frame * 3) % 30  # the worm drifts towards the fish, eaten, comes again
-    _shark(c, 7.0 + math.sin(frame * 0.5) * 1.5, 6.5 + math.sin(frame * 0.7), frame)
-    image.paste(c.finish().crop((0, 0, 32, 16)), (0, 0))
-    c2 = Canvas()
-    _fish(c2, 14.0, 6.5 + math.sin(frame * 0.6) * 0.6, frame)
-    fish_img = c2.finish().crop((0, 0, 32, 16))
-    mask = fish_img.convert("L").point(lambda v: 255 if v > 12 else 0)
-    image.paste(fish_img, (20, 0), mask)
-    pixels = image.load()
-    # the worm: a pink wiggle, until the fish's mouth reaches it
-    if worm_x > 41:
-        for i in range(4):
-            wx = worm_x + i
-            wy = 7 + (1 if (i + frame) % 2 else 0)
-            if 0 <= wx < W:
-                pixels[wx, wy] = (255, 120, 170)
-    # seabed: sand with pebbles, swaying weed
-    for x in range(W):
-        for y in (14, 15):
-            pixels[x, y] = (200, 170, 90) if (x * 7 + y * 3) % 11 else (150, 120, 70)
-        if (x * 13) % 17 == 0:
-            pixels[x, 13] = (120, 120, 130)
-    for base in (4, 33, 57):
-        for k in range(4):
-            sway = 1 if (frame + k + base) % 4 < 2 else 0
-            if 0 <= base + sway < W:
-                pixels[base + sway, 13 - k] = (40, 170, 70)
-    for i in range(3):  # bubbles rising from the fish
-        by = 6 - ((frame + i * 3) % 7)
-        if 0 <= by < 13:
-            pixels[42 + i % 2, by] = (150, 200, 255)
+def _point(x: float, y: float, angle: float, length: float) -> tuple[float, float]:
+    a = math.radians(angle)
+    return x + math.sin(a) * length, y + math.cos(a) * length
+
+
+def _figure(c: _Layer, hip: tuple[float, float], pose: dict, pal: dict) -> None:
+    """pose: lean, legs [(thigh, knee)]*2 front/back, arms [(upper, elbow)]*2, optional gun."""
+    hx, hy = hip
+    lean = pose.get("lean", 0.0)
+    neck = _point(hx, hy, 180 + lean, _LIMB["torso"])
+    shoulder = _point(hx, hy, 180 + lean, _LIMB["torso"] - 0.6)
+
+    def leg(thigh: float, knee: float, color: RGB, boot: RGB) -> None:
+        k = _point(hx, hy, thigh, _LIMB["thigh"])
+        a = _point(*k, thigh - knee, _LIMB["shin"])
+        c.paint(color, c.line_mask([(hx, hy), k], 1.55))
+        c.paint(color, c.line_mask([k, a], 1.35))
+        toe = _point(*a, thigh - knee + 90, 1.3)
+        c.paint(boot, c.line_mask([a, toe], 1.2))
+
+    def arm(upper: float, elbow: float, color: RGB, hand: RGB, gun: bool = False) -> None:
+        e = _point(*shoulder, upper, _LIMB["upper"])
+        h = _point(*e, upper + elbow, _LIMB["fore"])
+        c.paint(color, c.line_mask([shoulder, e], 1.25))
+        c.paint(color, c.line_mask([e, h], 1.1))
+        c.paint(hand, c.circle_mask(*h, 0.6))
+        if gun:
+            muzzle = _point(*h, upper + elbow, 1.8)
+            c.paint((70, 75, 85), c.line_mask([h, muzzle], 0.9))
+
+    (bt, bk), (ft, fk) = pose["legs"][1], pose["legs"][0]
+    (ba, be), (fa, fe) = pose["arms"][1], pose["arms"][0]
+    arm(ba, be, _darker(pal["sleeve"]), _darker(pal["skin"]))
+    leg(bt, bk, _darker(pal["legs"]), _darker(pal["boots"]))
+    c.paint(c.vgrad(pal["torso"], _darker(pal["torso"], 0.75), neck[1], hy),
+            c.line_mask([(hx, hy), neck], 2.2))
+    if "belt" in pal:
+        c.paint(pal["belt"], c.line_mask([_point(hx, hy, 180 + lean, 0.3), _point(hx, hy, 180 + lean, 0.9)], 2.3))
+    leg(ft, fk, pal["legs"], pal["boots"])
+    head = _point(*neck, 180 + lean, 1.25)
+    c.paint(pal["skin"], c.circle_mask(*head, 1.15))
+    c.paint(pal["hair"], c.circle_mask(head[0] - 0.35, head[1] - 0.45, 0.95))
+    if "scarf" in pal:  # a scarf streaming behind in the wind
+        flutter = pose.get("flutter", 0.0)
+        tail = [(neck[0], neck[1]), (neck[0] - 1.8, neck[1] - 0.2 + flutter * 0.4),
+                (neck[0] - 3.2, neck[1] + 0.3 - flutter * 0.5)]
+        c.paint(pal["scarf"], c.line_mask(tail, 0.9))
+    arm(fa, fe, pal["sleeve"], pal["skin"], pose.get("gun", False))
+
+
+class _Layer:
+    """A Canvas plus a coverage canvas, so smooth edges blend with any background."""
+
+    def __init__(self) -> None:
+        self.color, self.cover = Canvas(), Canvas()
+
+    def __getattr__(self, name):  # mask and gradient helpers come from the colour canvas
+        return getattr(self.color, name)
+
+    def paint(self, fill, m, alpha: float = 1.0) -> None:
+        self.color.paint(fill, m, alpha)
+        self.cover.paint((255, 255, 255), m, alpha)
+
+    def glow(self, *args, **kwargs) -> None:
+        self.color.glow(*args, **kwargs)
+
+
+def _paste_figure(image: Image.Image, layer: _Layer, x0: int, y0: int, box=(0, 0, 16, 16)) -> None:
+    """Composite the layer over the image: background * (1 - coverage) + colour."""
+    color = layer.color.finish().crop(box)
+    alpha = layer.cover.finish().crop(box).convert("L")
+    w, h = color.size
+    region = image.crop((x0, y0, x0 + w, y0 + h))
+    behind = Image.composite(Image.new("RGB", (w, h)), region, alpha)
+    image.paste(ImageChops.add(behind, color), (x0, y0))
+
+
+def _copper(top: RGB, bottom: RGB, bands: int = 8) -> Image.Image:
+    """Amiga-style copper gradient: horizontal bands from top to bottom colour."""
+    image = Image.new("RGB", (W, H))
+    px = image.load()
+    for y in range(H):
+        k = min(bands - 1, y * bands // H) / (bands - 1)
+        color = tuple(int(t + (b - t) * k) for t, b in zip(top, bottom))
+        for x in range(W):
+            px[x, y] = color
+    return image
+
+
+# ----------------------------------------------------------------- chomper
+def _chomper(c: _Layer, x: float, y: float, frame: int) -> None:
+    """A round green monster, 13 px high, big eyes, a toothy mouth that snaps."""
+    c.paint(c.rgrad(x - 2, y - 3, 8, (150, 255, 120), (20, 130, 50)), c.circle_mask(x, y, 6.4))
+    snap = 0.5 + 0.5 * math.sin(frame * 2.4)  # 0 shut .. 1 wide open
+    mouth = c.rrect_mask((x - 1.0, y + 1.0, x + 6.2, y + 1.6 + 2.6 * snap), 1.0)
+    c.paint((70, 10, 20), mouth)
+    for tx in (0.2, 1.9, 3.6, 5.1):  # teeth top and bottom
+        c.paint((255, 255, 245), c.poly_mask([(x + tx, y + 1.0), (x + tx + 1.2, y + 1.0), (x + tx + 0.6, y + 2.0)]))
+        c.paint((255, 255, 245), c.poly_mask([(x + tx, y + 1.6 + 2.6 * snap), (x + tx + 1.2, y + 1.6 + 2.6 * snap),
+                                              (x + tx + 0.6, y + 0.8 + 2.6 * snap)]))
+    for ex in (0.6, 3.6):  # big eyes looking ahead
+        c.paint((255, 255, 255), c.circle_mask(x + ex, y - 2.6, 1.5))
+        c.paint((20, 20, 40), c.circle_mask(x + ex + 0.6, y - 2.5, 0.75))
+    c.paint((80, 200, 90), c.poly_mask([(x - 2.0, y - 6.0), (x - 0.5, y - 8.2), (x + 0.6, y - 5.8)]))  # a horn
+    step = math.sin(frame * 2.0) * 1.0  # little feet
+    c.paint((20, 110, 40), c.rrect_mask((x - 3.5 + step, y + 5.2, x - 1.2 + step, y + 6.6), 0.6))
+    c.paint((20, 110, 40), c.rrect_mask((x + 1.2 - step, y + 5.2, x + 3.5 - step, y + 6.6), 0.6))
+
+
+def _bat(c: _Layer, x: float, y: float, frame: int) -> None:
+    flap = math.sin(frame * 2.2) * 2.2
+    c.paint((140, 60, 200), c.circle_mask(x, y, 2.0))
+    for side in (-1, 1):
+        c.paint((110, 40, 170), c.poly_mask([(x, y - 0.5), (x + side * 5.5, y - 2.5 - flap),
+                                              (x + side * 4.0, y + 1.0), (x + side * 2.2, y + 0.4)]))
+    c.paint((255, 230, 60), c.circle_mask(x + 0.8, y - 0.6, 0.45))
+    c.paint((255, 230, 60), c.circle_mask(x - 0.6, y - 0.6, 0.45))
+
+
+def render_chomper(frame: int) -> Image.Image:
+    """Maze corridor board at the bottom; the chomper munches gems, a bat chases it."""
+    image = _copper((10, 5, 40), (40, 20, 80))
+    px = image.load()
+    for x in range(W):  # the corridor walls: stone with a highlight
+        for y in (13, 14, 15):
+            px[x, y] = (70, 160, 170) if y == 13 else ((40, 110, 120) if (x + y) % 5 else (25, 80, 90))
+        px[x, 0] = (70, 160, 170)
+    scroll = frame * 2
+    for gx in range(-scroll % 8, W, 8):  # gems ahead of the mouth, eaten as it passes
+        if gx > 33:
+            hue = ((gx + scroll) // 8) % 3
+            color = ((255, 80, 120), (90, 220, 255), (255, 210, 60))[hue]
+            for dx, dy in ((0, 0), (1, 0), (0, -1), (0, 1), (-1, 0)):
+                if 0 <= gx + dx < W:
+                    px[gx + dx, 7 + dy] = color if (dx, dy) != (0, 0) else (255, 255, 255)
+    apple_x = 63 - (frame * 2) % 40
+    if apple_x > 34:  # an apple now and then
+        for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1), (-1, 0), (-1, 1), (0, -1)):
+            if 0 <= apple_x + dx < W:
+                px[apple_x + dx, 9 + dy] = (230, 30, 40) if dy >= 0 else (60, 160, 40)
+    c = _Layer()
+    _chomper(c, 8.0, 7.0 + math.sin(frame * 1.2) * 0.4, frame)
+    _paste_figure(image, c, 20, 0)
+    b = _Layer()
+    _bat(b, 7.0, 6.0 + math.sin(frame * 0.9) * 2.0, frame)
+    _paste_figure(image, b, 0, 0)
     return image
 
 
 # ------------------------------------------------------------------ runner
-_RUN = {
-    "a": ("..HH..", ".HSS..", "..SS..", "RRTT..", "R.TTS.", "..TT.S", "..TT..", "..BB..",
-          "..LL..", ".L..L.", "L....L", "F....F"),
-    "b": ("..HH..", ".HSS..", "..SS..", "RRTT..", "R.TT..", "..TTS.", "..TT..", "..BB..",
-          "..LL..", "..LL..", "..L.L.", "..F.F."),
-    "jump": ("..HH..", ".HSS..", "R.SS..", "RRTT.S", "..TTS.", "..TT..", "..BB..", ".LLLL.",
-             "L....L", "F....F", "......", "......"),
-}
-_RUN_COLORS = {"H": (90, 50, 20), "S": (255, 200, 150), "R": (230, 40, 40), "T": (60, 110, 200),
-               "B": (130, 80, 30), "L": (150, 110, 70), "F": (110, 70, 40)}
-_GAP = (30, 40)  # the gap in the ledge, in world pixels within one 64-pixel stretch
+_RUNNER_PAL = {"skin": (255, 205, 160), "hair": (120, 70, 30), "torso": (70, 200, 120), "sleeve": (70, 200, 120),
+               "legs": (225, 185, 120), "boots": (160, 95, 45), "belt": (240, 200, 70), "scarf": (255, 50, 50)}
+_GAP = (30, 41)
+
+
+def _run_pose(t: float) -> dict:
+    """An 8-step running cycle; t = 0..1."""
+    p = t * 2 * math.pi
+    legs = []
+    for phase in (0.0, math.pi):
+        swing = math.sin(p + phase)
+        thigh = 38 * swing
+        knee = 20 + 55 * max(0.0, math.cos(p + phase))  # the knee folds as the leg swings forward
+        legs.append((thigh, knee))
+    arms = [(-40 * math.sin(p), 70), (-40 * math.sin(p + math.pi), 70)]
+    return {"lean": 12, "legs": legs, "arms": arms, "flutter": math.sin(p * 2)}
+
+
+_JUMP = {"lean": 18, "legs": [(75, 95), (-25, 35)], "arms": [(120, 30), (-60, 60)], "flutter": 1.0}
 
 
 def render_runner(frame: int) -> Image.Image:
-    """The ledge scrolls left; the adventurer runs and leaps the gap with an arc."""
-    image = _blank((12, 10, 25))
-    pixels = image.load()
+    """A castle ledge scrolls by; the adventurer runs and long-jumps the gap."""
+    image = _copper((8, 4, 35), (55, 25, 75))
+    px = image.load()
     scroll = (frame * 3) % 64
-    for x in range(W):  # stone ledge with a gap, and the wall behind
+    for x in range(W):
         wx = (x + scroll) % 64
+        if wx % 32 in (10, 11, 12):  # distant pillars (slow parallax)
+            pass
         if not (_GAP[0] <= wx < _GAP[1]):
             for y in (13, 14, 15):
                 brick = (wx // 4 + (y % 2) * 2) % 3
-                pixels[x, y] = ((150, 130, 100), (125, 105, 80), (170, 150, 115))[brick]
-        if wx % 16 == 8:  # torch on the wall
-            pixels[x, 4] = (255, 200, 60) if frame % 2 else (255, 140, 30)
-            pixels[x, 5] = (200, 90, 20)
-            pixels[x, 6] = (90, 60, 40)
+                base = ((165, 140, 105), (140, 115, 85), (185, 160, 120))[brick]
+                px[x, y] = base if y > 13 else tuple(min(255, v + 40) for v in base)
+        if wx % 21 == 5:  # torches
+            px[x, 5] = (255, 230, 120) if frame % 2 else (255, 160, 40)
+            px[x, 4] = (255, 120, 30) if frame % 3 else (255, 200, 80)
+            px[x, 6] = (110, 70, 40)
+    for x in range(W):  # far pillars with parallax
+        wx = (x + scroll // 2) % 32
+        if wx in (2, 3):
+            for y in range(1, 13):
+                if px[x, y][0] < 60:
+                    px[x, y] = (55, 40, 85) if wx == 2 else (40, 30, 65)
     hero_x = 14
-    feet_world = (hero_x + 3 + scroll) % 64
-    ahead = (_GAP[0] - feet_world) % 64
-    behind = (feet_world - _GAP[1]) % 64
-    in_air = ahead <= 6 or (_GAP[0] <= feet_world < _GAP[1]) or behind <= 2
-    if in_air:  # a parabola from take-off to landing
-        progress = ((feet_world - (_GAP[0] - 6)) % 64) / (_GAP[1] - _GAP[0] + 9)
-        lift = round(math.sin(min(1.0, max(0.0, progress)) * math.pi) * 4)
-        _sprite(pixels, _RUN["jump"], hero_x, 1 - lift, _RUN_COLORS)
+    feet = (hero_x + 8 + scroll) % 64
+    take_off, land = _GAP[0] - 6, _GAP[1] + 2
+    c = _Layer()
+    if take_off <= feet < land:
+        t = (feet - take_off) / (land - take_off)
+        lift = math.sin(t * math.pi) * 4.0
+        _figure(c, (8.0, 8.4 - lift), _JUMP, _RUNNER_PAL)
     else:
-        _sprite(pixels, _RUN["a" if frame % 2 == 0 else "b"], hero_x, 1, _RUN_COLORS)
+        bob = abs(math.sin(frame / 8 * 2 * math.pi)) * 0.5
+        _figure(c, (8.0, 8.4 - bob), _run_pose((frame % 8) / 8), _RUNNER_PAL)
+    _paste_figure(image, c, hero_x, 0)
     return image
 
 
 # ------------------------------------------------------------------- agent
-_AGENT = {
-    "stand": ("..HH....", ".HSS....", "..SS....", ".CCCGGGG", ".CCC....", ".CCC....", ".CCC....",
-              ".PPP....", ".P.P....", ".P.P....", ".P.P....", ".P.P....", "BB.BB..."),
-    "crouch": ("........", "........", "........", "........", "..HH....", ".HSS....", "..SS....",
-               ".CCCGGGG", ".CCC....", ".PPPP...", "PP..P...", "P...P...", "BB..BB.."),
-}
-_AGENT_COLORS = {"H": (40, 30, 20), "S": (240, 190, 140), "C": (110, 115, 105), "G": (60, 60, 70),
-                 "P": (70, 85, 140), "B": (120, 90, 60)}
+_AGENT_PAL = {"skin": (255, 200, 150), "hair": (90, 60, 35), "torso": (175, 180, 160), "sleeve": (175, 180, 160),
+              "legs": (90, 115, 200), "boots": (120, 90, 60)}
+_AIM = {"lean": 2, "legs": [(18, 5), (-14, 5)], "arms": [(92, 0), (60, 60)], "gun": True}
+_CROUCH = {"lean": 25, "legs": [(85, 150), (20, 100)], "arms": [(92, -5), (50, 60)], "gun": True}
 
 
 def _drone(pixels, x: int, y: int, frame: int, hit: int = 0) -> None:
-    if hit:  # sparks flying out
-        rng = random.Random(hit)
-        for _ in range(10):
-            dx, dy = rng.randint(-5, 5), rng.randint(-4, 4)
-            if 0 <= x + dx < W and 0 <= y + dy < H:
-                pixels[x + dx, y + dy] = (255, rng.randint(120, 230), 40)
-        return
     def put(px_, py_, color):
         if 0 <= px_ < W and 0 <= py_ < H:
             pixels[px_, py_] = color
 
+    if hit:  # sparks flying out
+        rng = random.Random(hit)
+        for _ in range(12):
+            put(x + rng.randint(-5, 5), y + rng.randint(-4, 4), (255, rng.randint(120, 230), 40))
+        return
     for dx in range(-4, 5):
-        put(x + dx, y, (170, 175, 185))
+        put(x + dx, y, (200, 205, 215) if abs(dx) < 3 else (150, 155, 165))
     for dx in range(-3, 4):
-        put(x + dx, y + 1, (120, 125, 135))
+        put(x + dx, y + 1, (110, 115, 130))
     put(x, y + 1, (255, 40, 40) if frame % 2 else (160, 20, 20))
     for dx in (-4, 4):  # rotors
-        put(x + dx, y - 1, (220, 220, 230) if (frame + dx) % 2 else (90, 90, 100))
+        put(x + dx, y - 1, (230, 230, 240) if (frame + dx) % 2 else (90, 90, 100))
 
 
 def render_agent(frame: int) -> Image.Image:
-    """Shoot, the drone fires back, crouch, stand, shoot again; the drone blows up."""
-    image = _blank((5, 8, 18))
-    pixels = image.load()
-    for x in range(W):  # metal floor
-        pixels[x, 15] = (70, 75, 85) if x % 4 else (110, 115, 125)
+    """Aim and shoot, the drone fires back, crouch, stand, shoot; the drone blows up."""
+    image = _copper((5, 20, 30), (20, 50, 60))
+    px = image.load()
+    for x in range(W):  # metal floor with lights, pipes on the wall
+        px[x, 15] = (80, 90, 100) if x % 6 else (140, 150, 160)
+        px[x, 14] = (50, 60, 70)
+        if x % 12 == 6:
+            px[x, 2] = (90, 255, 200) if (frame + x) % 4 else (40, 120, 100)
+    for x in range(W):
+        px[x, 1] = (60, 70, 80)
     phase = frame % 24
     drone_x, drone_y = 50, 4 + round(math.sin(frame * 0.8))
     crouch = 7 <= phase <= 11
-    _sprite(pixels, _AGENT["crouch" if crouch else "stand"], 4, 2, _AGENT_COLORS)
-    gun_y = 9 if crouch else 5
+    c = _Layer()
+    _figure(c, (6.0, 8.2 + (3.2 if crouch else 0.0)), _CROUCH if crouch else _AIM, _AGENT_PAL)
+    _paste_figure(image, c, 2, 0)
+    gun_y = 7 if crouch else 4
     if phase in (1, 2, 3, 4, 13, 14, 15, 16):  # our shot flying right
         t = (phase - 1) % 12
-        bx = 13 + t * 9
+        bx = 16 + t * 9
         if phase in (1, 13):
-            pixels[12, gun_y] = (255, 240, 150)  # muzzle flash
+            px[15, gun_y] = (255, 250, 180)  # muzzle flash
+            px[15, gun_y - 1] = (255, 200, 80)
         for k in range(3):
             if bx + k < W:
-                pixels[bx + k, gun_y] = (255, 230, 90)
+                px[bx + k, gun_y] = (255, 230, 90)
     if 7 <= phase <= 10:  # the drone's red laser, passing over the crouching agent
         lx = drone_x - 6 - (phase - 7) * 12
         for k in range(5):
             if 0 <= lx - k < W:
-                pixels[lx - k, 5] = (255, 50, 50)
+                px[lx - k, 4] = (255, 50, 50)
     hit = frame // 24 * 7 + 1 if 17 <= phase <= 19 else 0
     if phase < 20:
-        _drone(pixels, drone_x, drone_y, frame, hit)
+        _drone(px, drone_x, drone_y, frame, hit)
     else:  # a new drone flies in
-        _drone(pixels, drone_x + (24 - phase) * 4, drone_y, frame)
+        _drone(px, drone_x + (24 - phase) * 4, drone_y, frame)
     return image
 
 
 def render_game(name: str, frame: int = 0, seed: int = 0) -> Image.Image:
     if name == "terminal":
         return render_terminal(frame % terminal_frames(seed), seed)
-    return {"fish": render_fish, "runner": render_runner, "agent": render_agent}.get(name, render_fish)(frame)
+    return {"chomper": render_chomper, "runner": render_runner, "agent": render_agent}.get(name, render_chomper)(frame)
