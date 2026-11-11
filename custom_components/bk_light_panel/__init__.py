@@ -81,6 +81,7 @@ from .render import (
     render_fill,
     render_flip_clock,
     render_text,
+    to_gif,
     to_png,
 )
 
@@ -205,6 +206,24 @@ SHOW_ROOM_SCHEMA = vol.Schema(
      vol.Optional("humidity"): vol.Any(None, cv.string, vol.Coerce(float)),
      vol.Optional("target"): vol.Any(None, cv.string, vol.Coerce(float))}
 )
+PLAY_ANIMATION_SCHEMA = vol.Schema(
+    {
+        **BASE,
+        # one of the built-in animations (64x16), or your own GIF file
+        vol.Exclusive("screen", "source"): vol.In(RETRO),
+        vol.Exclusive("file", "source"): cv.string,
+        vol.Optional("frames", default=24): vol.All(vol.Coerce(int), vol.Range(1, 120)),
+        vol.Optional("frame_ms", default=100): vol.All(vol.Coerce(int), vol.Range(20, 2000)),
+        vol.Optional("slot", default=1): vol.All(vol.Coerce(int), vol.Range(1, 99)),
+        vol.Optional("text"): vol.Any(None, cv.string),
+        vol.Optional("tint"): vol.Any(None, COLOR),
+    }
+)
+SET_PLAYLIST_SCHEMA = vol.Schema(
+    {**BASE, vol.Required("slots"): vol.All(cv.ensure_list, [vol.All(vol.Coerce(int), vol.Range(1, 99))])}
+)
+SET_BRIGHTNESS_SCHEMA = vol.Schema({vol.Optional(ATTR_PANEL): cv.string,
+                                    vol.Required(ATTR_BRIGHTNESS): vol.All(vol.Coerce(int), vol.Range(0, 100))})
 SHOW_FORECAST_SCHEMA = vol.Schema(
     {**BASE, **ANIMATION,
      vol.Required("weather"): cv.entity_id,
@@ -701,6 +720,54 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             up = [0.0] * len(down)
         await _play(call, panel, lambda f: render_traffic(down, up, f, call.data.get("max_rate")))
 
+    async def play_animation(call: ServiceCall) -> ServiceResponse:
+        """Store an animation in a slot; the panel plays it by itself, smoothly."""
+        panel = _panel_for(hass, call)
+        size = await panel.async_get_size()
+        tint, count = call.data.get("tint"), call.data["frames"]
+        frame_ms = call.data["frame_ms"]
+        if "file" in call.data:
+            path = call.data["file"]
+            if not hass.config.is_allowed_path(path):
+                raise ServiceValidationError(f"{path} is not in an allowed folder (allowlist_external_dirs)")
+
+            def load() -> tuple[list, int]:
+                with Image.open(path) as source:
+                    frames, durations = [], []
+                    for index in range(min(getattr(source, "n_frames", 1), count)):
+                        source.seek(index)
+                        durations.append(source.info.get("duration", frame_ms))
+                        frames.append(source.convert("RGB").resize(size, Image.Resampling.LANCZOS))
+                return frames, int(sum(durations) / len(durations))
+
+            frames, frame_ms = await hass.async_add_executor_job(load)
+        elif "screen" in call.data:
+            if not is_wide(size):
+                raise ServiceValidationError("The built-in animations need a wide 64x16 panel")
+            screen, seed = call.data["screen"], random.randint(0, 1_000_000)
+            frames = await hass.async_add_executor_job(
+                lambda: [render_retro(screen, f, call.data.get("text"), seed) for f in range(count)]
+            )
+        else:
+            raise ServiceValidationError("Give screen (a built-in animation) or file (a GIF)")
+        frames = [apply_tint(frame, tint) for frame in frames]
+        gif = await hass.async_add_executor_job(to_gif, frames, frame_ms, call.data[ATTR_BRIGHTNESS])
+        uploaded = await panel.async_store_animation(gif, call.data["slot"])
+        return {"bytes": len(gif), "frames": len(frames), "frame_ms": frame_ms,
+                "slot": call.data["slot"], "uploaded": uploaded}
+
+    async def set_playlist(call: ServiceCall) -> None:
+        """Which stored slots the panel plays in turn (also while disconnected)."""
+        await _panel_for(hass, call).async_set_playlist(call.data["slots"])
+
+    async def set_brightness(call: ServiceCall) -> None:
+        """The panel's own brightness: pixels keep their full colour."""
+        await _panel_for(hass, call).async_set_brightness(call.data[ATTR_BRIGHTNESS])
+
+    hass.services.async_register(DOMAIN, "play_animation", play_animation, PLAY_ANIMATION_SCHEMA,
+                                 supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "set_playlist", set_playlist, SET_PLAYLIST_SCHEMA)
+    hass.services.async_register(DOMAIN, "set_brightness", set_brightness, SET_BRIGHTNESS_SCHEMA)
     hass.services.async_register(DOMAIN, "show_forecast", show_forecast, SHOW_FORECAST_SCHEMA)
     hass.services.async_register(DOMAIN, "show_retro", show_retro, SHOW_RETRO_SCHEMA)
     hass.services.async_register(DOMAIN, "show_room", show_room, SHOW_ROOM_SCHEMA)

@@ -108,6 +108,9 @@ or address.
 | `bk_light_panel.show_room` | 64×16: a room's name, temperature and humidity |
 | `bk_light_panel.show_traffic` | 64×16: network download / upload of the last minutes, from data-rate sensors |
 | `bk_light_panel.show_retro` | 64×16: retro screens and little animations (8-bit start-up screens, aliens, a root prompt running `rm -rf /*`, a maze chomper, a runner, an agent vs a drone) |
+| `bk_light_panel.play_animation` | Store an animation (built-in or your GIF) in a panel slot; the panel plays it smoothly by itself |
+| `bk_light_panel.set_playlist` | Which stored slots play in turn (also while disconnected) |
+| `bk_light_panel.set_brightness` | The panel's own brightness, 0–100 % (keeps full colour) |
 | `bk_light_panel.show_image` | Your own picture file (must be in an allowed folder, e.g. `/config/www`) |
 | `bk_light_panel.fill` / `clear` | One colour / black |
 

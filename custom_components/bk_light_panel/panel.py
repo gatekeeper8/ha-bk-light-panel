@@ -7,6 +7,7 @@ Bluetooth proxies with active connections enabled.
 from __future__ import annotations
 
 import asyncio
+import binascii
 import time
 import logging
 from collections.abc import Callable
@@ -28,7 +29,7 @@ from .const import (
     RECOVER_DELAYS,
     UNCONFIRMED_LIMIT,
 )
-from .protocol import FrameNotConfirmed, PanelSession
+from .protocol import FrameNotConfirmed, PanelSession, brightness_command, playlist_command
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ class BkLightPanel:
         self._acknowledged_writes = not FAST_WRITES
         self._unconfirmed_in_row = 0  # pictures missed in a row without receipts
         self._acknowledged_since = 0.0
+        self._stored: dict[int, int] = {}  # slot -> CRC of the GIF stored there
+        self._brightness: int | None = None  # the panel's own brightness, once set
         # what kind of screen is shown ("clock", "readings"; None = anything else)
         self.last_screen: str | None = None
         # (width, height), known after the first handshake
@@ -128,6 +131,59 @@ class BkLightPanel:
                     self._cancel_idle = async_call_later(
                         self.hass, IDLE_DISCONNECT_SECONDS, self._idle_disconnect
                     )
+
+    async def _session_call(self, what: str, call) -> None:
+        """Run call(session) with the lock held; reconnect and retry once."""
+        async with self._lock:
+            self._stop_idle_timer()
+            for attempt in (1, 2):
+                try:
+                    await self._ensure_connected()
+                    assert self._session is not None
+                    await call(self._session)
+                    return
+                except (BleakError, TimeoutError, EOFError, OSError) as err:
+                    _LOGGER.debug("%s on %s failed (attempt %s): %s", what, self.name, attempt, err)
+                    await self._disconnect()
+                    if attempt == 2:
+                        raise HomeAssistantError(f"{what} on {self.name} failed: {err or type(err).__name__}") from err
+
+    async def async_store_animation(self, gif: bytes, slot: int, play: bool = True) -> bool:
+        """Store a GIF in a slot (skipped if the slot already holds it) and play it.
+
+        Returns True if the GIF was uploaded. The panel then plays it by itself,
+        also while disconnected, until the next live picture.
+        """
+        crc = binascii.crc32(gif)
+        upload = self._stored.get(slot) != crc
+
+        async def run(session) -> None:
+            if play:
+                await session.command(playlist_command([slot]))
+            if upload:
+                await session.send_gif(gif, slot)
+
+        await self._session_call("Storing an animation", run)
+        if upload:
+            self._stored[slot] = crc
+            _LOGGER.debug("%s: stored %d bytes of animation in slot %d", self.name, len(gif), slot)
+        # the screen no longer shows the last live picture: send it again next time,
+        # and a reconnect must not cover the animation with it
+        self._last_png = self._wanted_png = None
+        self.last_screen = "animation"
+        return upload
+
+    async def async_set_playlist(self, slots: list[int]) -> None:
+        """Play these stored slots in turn (also what shows while disconnected)."""
+        await self._session_call("Setting the playlist", lambda s: s.command(playlist_command(slots)))
+        self._last_png = None
+
+    async def async_set_brightness(self, level: int) -> None:
+        """The panel's own brightness, 0-100 (pixels keep their full colour)."""
+        if self._brightness == level:
+            return
+        await self._session_call("Setting brightness", lambda s: s.command(brightness_command(level)))
+        self._brightness = level
 
     async def _ensure_connected(self) -> None:
         if self._client is not None and self._client.is_connected and self._session:

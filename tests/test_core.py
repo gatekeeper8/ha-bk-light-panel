@@ -111,7 +111,10 @@ class FakePanel:
             if len(self.buffer) >= expected:
                 self.frame = self.buffer
                 self.buffer = b""
-                self._notify("05 00 02 00 03")
+                if self.frame[3:4] == b"\x80":  # a short command (playlist 08, brightness 04)
+                    self._notify(f"05 00 {self.frame[2]:02x} 80 01")
+                else:  # a picture (02) or a stored animation (03)
+                    self._notify(f"05 00 {self.frame[2]:02x} 00 03")
 
 
 def test_session_handshake_and_chunked_frame():
@@ -613,3 +616,43 @@ def test_games():
     # the terminal ends with a file count
     last = games.render_terminal(games.terminal_frames(3) - 2, 3)
     assert last.getbbox() is not None
+
+
+# Bytes recorded from the panel's phone app (2026-11-11), to check our frames.
+APP_GIF_HEADER = bytes.fromhex("53 01 03 00 00 44 01 00 00 eb 35 82 3f 02 04")
+APP_PLAYLIST_ONE = bytes.fromhex("07 00 08 80 01 00 08")
+APP_PLAYLIST_TWO = bytes.fromhex("08 00 08 80 02 00 07 08")
+
+
+def test_frames_match_the_app():
+    gif = b"G" * 324
+    frame = protocol.build_frame(gif, protocol.KIND_GIF, mode=0x02, slot=4)
+    assert frame[:9] == APP_GIF_HEADER[:9] and frame[13:15] == APP_GIF_HEADER[13:15]
+    assert len(frame) == 339
+    assert protocol.playlist_command([8]) == APP_PLAYLIST_ONE
+    assert protocol.playlist_command([7, 8]) == APP_PLAYLIST_TWO
+    assert protocol.brightness_command(94) == bytes.fromhex("05 00 04 80 5e")
+    assert protocol.is_ack_frame(bytes.fromhex("05 00 03 00 03"))
+    assert protocol.command_ack(bytes.fromhex("05 00 08 80 01")) == 0x08
+    # a live picture keeps slot 101
+    assert protocol.build_frame(b"P" * 10)[13:15] == b"\x00\x65"
+
+
+def test_store_gif_and_commands():
+    from PIL import Image as PILImage
+
+    async def run():
+        fake = FakePanel(wide=True)
+        session = protocol.PanelSession(fake, max_write=244, acknowledged=True)
+        await session.start()
+        frames = [PILImage.new("RGB", (64, 16), (255 * (i % 2), 0, 255)) for i in range(4)]
+        gif = render.to_gif(frames, 90)
+        await session.command(protocol.playlist_command([3]))
+        await session.send_gif(gif, 3)
+        await session.command(protocol.brightness_command(40))
+        return fake, gif
+
+    fake, gif = asyncio.run(run())
+    assert fake.frame[2] == 0x04  # the last command: brightness
+    with PILImage.open(__import__("io").BytesIO(gif)) as image:
+        assert image.size == (64, 16) and image.n_frames == 4

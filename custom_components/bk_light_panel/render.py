@@ -222,6 +222,27 @@ def to_png(image: Image.Image, brightness: int = 100) -> bytes:
     return buffer.getvalue()
 
 
+def to_gif(frames: list[Image.Image], frame_ms: int = 100, brightness: int = 100, colors: int = 32) -> bytes:
+    """Frames as a looping GIF animation, for the panel to store and play itself.
+
+    One shared palette of `colors` for all frames keeps the file small (a few KB
+    for a 24-frame animation instead of 10-25 KB), so the upload is quick.
+    """
+    width, height = frames[0].size
+    strip = Image.new("RGB", (width, height * len(frames)))
+    for index, frame in enumerate(frames):
+        frame = frame.convert("RGB")
+        if brightness < 100:
+            frame = ImageEnhance.Brightness(frame).enhance(max(0, brightness) / 100)
+        strip.paste(frame, (0, index * height))
+    shared = strip.quantize(colors=max(2, min(256, colors)), method=Image.Quantize.MEDIANCUT)
+    images = [shared.crop((0, i * height, width, (i + 1) * height)) for i in range(len(frames))]
+    buffer = BytesIO()
+    images[0].save(buffer, format="GIF", save_all=True, append_images=images[1:],
+                   duration=max(20, int(frame_ms)), loop=0, optimize=True, disposal=1)
+    return buffer.getvalue()
+
+
 # ------------------------------------------------------------------ clock
 # Large 5x7 digits for the clock face.
 _BIG: dict[str, tuple[str, ...]] = {

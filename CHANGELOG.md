@@ -1,6 +1,11 @@
 # Changelog
 
 ## 0.9.0
+- **Stored animations** (protocol read from the phone app's traffic): `play_animation`
+  stores a GIF in one of the panel's slots and the panel plays it by itself, smoothly
+  (e.g. 10 frames a second) and also while disconnected, until the next picture. Use a
+  built-in animation or your own GIF. `set_playlist` chooses the slots that play in
+  turn, `set_brightness` sets the panel's own brightness (full colour when dim).
 - Pictures are sent in pieces of at most 244 bytes (one radio packet) instead of
   514: far fewer dropped connections through ESPHome Bluetooth proxies, especially
   with two panels on one proxy.

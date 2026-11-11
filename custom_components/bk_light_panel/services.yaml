@@ -691,3 +691,73 @@ show_forecast:
     panel:
       selector:
         text:
+
+play_animation:
+  fields:
+    screen:
+      selector:
+        select:
+          options: [atari, c64, invaders, terminal, chomper, runner, agent]
+    file:
+      example: /config/www/animation.gif
+      selector:
+        text:
+    frames:
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 120
+    frame_ms:
+      default: 100
+      selector:
+        number:
+          min: 20
+          max: 2000
+          unit_of_measurement: ms
+    slot:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 99
+    text:
+      selector:
+        text:
+    tint:
+      selector:
+        color_rgb:
+    brightness:
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:
+
+set_playlist:
+  fields:
+    slots:
+      required: true
+      example: "[1, 2]"
+      selector:
+        object:
+    panel:
+      selector:
+        text:
+
+set_brightness:
+  fields:
+    brightness:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    panel:
+      selector:
+        text:

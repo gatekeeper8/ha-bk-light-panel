@@ -553,6 +553,76 @@
           "description": "Name or Bluetooth address; only needed with several panels."
         }
       }
+    },
+    "play_animation": {
+      "name": "Play animation (stored)",
+      "description": "Stores an animation in one of the panel's slots as a GIF; the panel then plays it by itself, smoothly, also while disconnected, until the next picture. A built-in animation (64x16) or your own GIF file.",
+      "fields": {
+        "screen": {
+          "name": "Built-in animation",
+          "description": "atari, c64, invaders, terminal, chomper, runner or agent (64x16 panels)."
+        },
+        "file": {
+          "name": "GIF file",
+          "description": "Your own GIF (in an allowed folder, e.g. /config/www); scaled to the panel."
+        },
+        "frames": {
+          "name": "Frames",
+          "description": "How many frames to store (built-in animations, or the first frames of a file)."
+        },
+        "frame_ms": {
+          "name": "Frame time",
+          "description": "Milliseconds per frame (built-in animations; a file keeps its own timing)."
+        },
+        "slot": {
+          "name": "Slot",
+          "description": "The panel's storage slot; an unchanged animation is not uploaded again."
+        },
+        "text": {
+          "name": "Text",
+          "description": "atari and c64: the scrolling line; invaders: a caption."
+        },
+        "tint": {
+          "name": "Tint",
+          "description": "Show in one colour."
+        },
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 % (darkens the pixels)."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "set_playlist": {
+      "name": "Set playlist",
+      "description": "Which stored slots the panel plays in turn; also what it shows while nothing is connected.",
+      "fields": {
+        "slots": {
+          "name": "Slots",
+          "description": "A list of slot numbers, e.g. [1] or [1, 2]."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
+    },
+    "set_brightness": {
+      "name": "Set panel brightness",
+      "description": "The panel's own brightness, 0-100 %. Unlike the brightness of a picture it keeps the pixels' full colour, so dim screens stay readable.",
+      "fields": {
+        "brightness": {
+          "name": "Brightness",
+          "description": "0-100 %."
+        },
+        "panel": {
+          "name": "Panel",
+          "description": "Name or Bluetooth address; only needed with several panels."
+        }
+      }
     }
   }
 }
