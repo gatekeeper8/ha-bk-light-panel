@@ -665,7 +665,7 @@ def test_runner_ledge_is_dark_and_warm():
     image = games.render_runner(0)
     px = image.load()
     ledge = [px[x, y] for x in range(64) if not 12 <= x < 32  # not under the runner
-             for y in (13, 14, 15) if max(px[x, y]) > 30]
+             for y in (13, 14, 15) if px[x, y][0] > px[x, y][2]]  # not the sky in the gap
     assert len(ledge) > 60
     for r, g, b in ledge:
         assert max(r, g, b) <= 160 and r > g > b
