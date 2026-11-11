@@ -248,7 +248,10 @@ class BkLightPanel:
 
         async def run(session: PanelSession) -> None:
             nonlocal uploaded
-            if level != self._brightness:  # dim first: no bright flash of the animation
+            # an untouched panel is at full brightness: nothing to send for 100
+            current = self._brightness if self._brightness is not None else (
+                100 if self._wanted_brightness is None else None)
+            if level != current:  # dim first: no bright flash of the animation
                 await self._command(session, brightness_command(level))
                 self._brightness = level
             # playlist first, then the data, as the phone app does
@@ -284,6 +287,31 @@ class BkLightPanel:
         if play:
             self._last_png = self._wanted_png = None
             self.last_screen = "animation"
+        return uploaded
+
+    async def async_set_background(self, gif: bytes, slot: int, force: bool = False) -> bool:
+        """Store an animation (if the slot differs) and make it the background: what the
+        panel plays whenever no live picture is shown, e.g. after a dropped connection.
+
+        The live picture that should be on the screen is sent again straight away,
+        so while connected nothing changes. Returns True if the GIF was uploaded.
+        """
+        uploaded = False
+
+        async def run(session: PanelSession) -> None:
+            nonlocal uploaded
+            await session.command(playlist_command([slot]))
+            self._playlist = [slot]
+            uploaded = await self._upload(session, gif, slot, force) or uploaded
+            if self._wanted_png is not None:
+                await self._apply_state(session)
+                await session.send_png(self._wanted_png)
+                self._last_png = self._wanted_png
+            else:
+                self._last_png = None
+
+        self._background = [slot]
+        await self._session_call("Setting the safety animation", run)
         return uploaded
 
     async def async_set_playlist(self, slots: list[int]) -> None:

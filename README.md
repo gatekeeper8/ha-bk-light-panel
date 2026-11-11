@@ -110,6 +110,7 @@ or address.
 | `bk_light_panel.show_retro` | 64×16: retro screens and little animations (8-bit start-up screens, aliens, a root prompt running `rm -rf /*`, a maze chomper, a runner, an agent vs a drone). Played from the panel's memory: each is uploaded once to its own slot (23–29), then only the playlist switches; `mode: live` streams frames instead |
 | `bk_light_panel.play_animation` | Store an animation (built-in or your GIF) in a panel slot; the panel plays it smoothly by itself |
 | `bk_light_panel.set_playlist` | Which stored slots play in turn (also while disconnected) |
+| `bk_light_panel.set_safety_animation` | A calm breathing animation (or `style: black`) stored in the panel and put in its playlist, so a dropped connection shows it; `tint` e.g. red at night |
 | `bk_light_panel.set_brightness` | The panel's own brightness, 0–100 % (keeps full colour) |
 | `bk_light_panel.show_image` | Your own picture file (must be in an allowed folder, e.g. `/config/www`) |
 | `bk_light_panel.fill` / `clear` | One colour / black |
@@ -179,9 +180,12 @@ they can start at their minimum values.
   each is uploaded only once. If you change animations with the phone app, add
   `force: true` once. A GIF the panel does not confirm is streamed live instead and not
   tried again for 6 hours.
-- **Stored animations**: when nothing is connected, the panel plays the animations
-  saved by its phone app. The integration therefore stays connected. To be safe,
-  delete the saved programs in the app once.
+- **Stored animations**: when nothing is connected, the panel plays the animations in
+  its playlist, by default the ones saved by its phone app. The integration therefore
+  stays connected, and `set_safety_animation` replaces the playlist with a calm
+  animation of its own (the example packages switch it between day, red night and
+  black when the screen is off), so a dropped connection never brings the phone app's
+  programs back.
 - Captions exist in English and Polish. More languages are welcome: add them to
   `MOON_NAMES`, `CHARGING` and `SEASON_NAMES` in `icons.py` (every word must fit in
   32 pixels; a test checks it).

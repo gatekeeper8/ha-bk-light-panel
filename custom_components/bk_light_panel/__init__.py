@@ -67,7 +67,14 @@ from .aurora import DEFAULT_URL as AURORA_URL, OVATION_URL, next_hours, ovation_
 from .icons import ANIMATED, LANGUAGES, language_for, render_icon, season_for
 from .forecast import DAY_NAMES, render_forecast
 from .panel import BkLightPanel
-from .stored import RETRO_SLOTS, retro_gif
+from .stored import (
+    RETRO_SLOTS,
+    SAFETY_DARK_SLOT,
+    SAFETY_NIGHT_SLOT,
+    SAFETY_SLOT,
+    retro_gif,
+    safety_gif,
+)
 from .readings import ORDER as READING_KINDS, render_readings
 from .wide import (
     is_wide,
@@ -230,6 +237,17 @@ PLAY_ANIMATION_SCHEMA = vol.Schema(
 )
 SET_PLAYLIST_SCHEMA = vol.Schema(
     {**BASE, vol.Required("slots"): vol.All(cv.ensure_list, [vol.All(vol.Coerce(int), vol.Range(1, 99))])}
+)
+SET_SAFETY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_PANEL): cv.string,
+        # calm: a slowly breathing ember; black: dark screen (display switched off)
+        vol.Optional("style", default="calm"): vol.In(["calm", "black"]),
+        vol.Optional("tint"): vol.Any(None, COLOR),
+        # default: 20 (calm), 21 (calm with a tint, e.g. night), 22 (black)
+        vol.Optional("slot"): vol.All(vol.Coerce(int), vol.Range(1, 99)),
+        vol.Optional("force", default=False): cv.boolean,
+    }
 )
 SET_BRIGHTNESS_SCHEMA = vol.Schema({vol.Optional(ATTR_PANEL): cv.string,
                                     vol.Required(ATTR_BRIGHTNESS): vol.All(vol.Coerce(int), vol.Range(0, 100))})
@@ -804,6 +822,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         """Which stored slots the panel plays in turn (also while disconnected)."""
         await _panel_for(hass, call).async_set_playlist(call.data["slots"])
 
+    async def set_safety_animation(call: ServiceCall) -> ServiceResponse:
+        """A calm animation in the panel's playlist: shown if the connection drops."""
+        panel = _panel_for(hass, call)
+        size = await panel.async_get_size()
+        style, tint = call.data["style"], call.data.get("tint")
+        slot = call.data.get("slot") or (
+            SAFETY_DARK_SLOT if style == "black" else SAFETY_NIGHT_SLOT if tint else SAFETY_SLOT)
+        gif = await hass.async_add_executor_job(safety_gif, size, style, tint)
+        uploaded = await panel.async_set_background(gif, slot, call.data["force"])
+        return {"slot": slot, "style": style, "uploaded": uploaded, "bytes": len(gif)}
+
     async def set_brightness(call: ServiceCall) -> None:
         """The panel's own brightness: pixels keep their full colour."""
         await _panel_for(hass, call).async_set_brightness(call.data[ATTR_BRIGHTNESS])
@@ -812,6 +841,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                                  supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "set_playlist", set_playlist, SET_PLAYLIST_SCHEMA)
     hass.services.async_register(DOMAIN, "set_brightness", set_brightness, SET_BRIGHTNESS_SCHEMA)
+    hass.services.async_register(DOMAIN, "set_safety_animation", set_safety_animation, SET_SAFETY_SCHEMA,
+                                 supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "show_forecast", show_forecast, SHOW_FORECAST_SCHEMA)
     hass.services.async_register(DOMAIN, "show_retro", show_retro, SHOW_RETRO_SCHEMA,
                                  supports_response=SupportsResponse.OPTIONAL)
