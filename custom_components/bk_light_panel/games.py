@@ -249,6 +249,11 @@ def render_chomper(frame: int) -> Image.Image:
 _RUNNER_PAL = {"skin": (255, 205, 160), "hair": (120, 70, 30), "torso": (70, 200, 120), "sleeve": (70, 200, 120),
                "legs": (225, 185, 120), "boots": (160, 95, 45), "belt": (240, 200, 70), "scarf": (255, 50, 50)}
 _GAP = (30, 41)
+# The ledge: dark, warm sandstone. LEDs make mid-bright beige look almost white
+# with a pink cast, so the stones stay low and lean to red-brown.
+LEDGE_STONES = ((96, 52, 24), (78, 41, 19), (112, 63, 30))
+LEDGE_TOP = ((140, 84, 38), (122, 72, 32), (156, 96, 44))  # the worn top edge, catching torchlight
+LEDGE_MORTAR = (38, 18, 8)
 
 
 def _run_pose(t: float) -> dict:
@@ -278,9 +283,11 @@ def render_runner(frame: int) -> Image.Image:
             pass
         if not (_GAP[0] <= wx < _GAP[1]):
             for y in (13, 14, 15):
-                brick = (wx // 4 + (y % 2) * 2) % 3
-                base = ((165, 140, 105), (140, 115, 85), (185, 160, 120))[brick]
-                px[x, y] = base if y > 13 else tuple(min(255, v + 40) for v in base)
+                if y > 13 and (wx + (y % 2) * 2) % 4 == 3:  # dark mortar between the stones
+                    px[x, y] = LEDGE_MORTAR
+                else:
+                    brick = (wx // 4 + (y % 2) * 2) % 3
+                    px[x, y] = (LEDGE_TOP if y == 13 else LEDGE_STONES)[brick]
         if wx % 21 == 5:  # torches
             px[x, 5] = (255, 230, 120) if frame % 2 else (255, 160, 40)
             px[x, 4] = (255, 120, 30) if frame % 3 else (255, 200, 80)

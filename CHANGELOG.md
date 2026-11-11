@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.0 (unreleased)
+- Runner animation: the castle ledge is darker, warmer sandstone with mortar lines (it
+  showed almost white-pink on the panel).
+
 ## 0.9.0
 - **Stored animations** (protocol read from the phone app's traffic): `play_animation`
   stores a GIF in one of the panel's slots and the panel plays it by itself, smoothly
