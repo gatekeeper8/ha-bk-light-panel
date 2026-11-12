@@ -41,14 +41,20 @@ def retro_timing(name: str) -> tuple[int, int]:
         "invaders": (48, 280),                                 # march 6 x cannon 48
         "terminal": (terminal_frames(RETRO_SEED), 260),        # type, delete, count, blink
         "chomper": (20, 200),                                  # gems 4 x apple 20
-        "runner": (64, 150),                                   # ledge 64 px, 3 px a frame
+        "runner": (32, 200),                                   # every 2nd step: 6 px a frame
         "agent": (24, 240),                                    # shoot, duck, shoot, boom
     }.get(name, (24, 250))
 
 
 def retro_frames(name: str, text: str | None = None) -> tuple[list[Image.Image], int]:
     frames, frame_ms = retro_timing(name)
-    return [render_retro(name, f, text, RETRO_SEED) for f in range(frames)], frame_ms
+    step = RETRO_STEP.get(name, 1)
+    return [render_retro(name, f * step, text, RETRO_SEED) for f in range(frames)], frame_ms
+
+
+# drawing steps skipped in the stored version, to keep the GIF small: every
+# upload costs about 0.5 s per KB, and it must fit the gap between two clocks
+RETRO_STEP = {"runner": 2}
 
 
 def retro_gif(name: str, text: str | None = None, tint=None) -> bytes:

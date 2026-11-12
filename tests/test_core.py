@@ -796,14 +796,34 @@ def test_stored_animation_dims_relative_to_wanted_brightness():
     async def run():
         fake = RecordingPanel(wide=True)
         _, panel = _connected_panel(fake)
-        panel.load_stored({"26": binascii.crc32(gif)})  # known from an earlier run
         await panel.async_set_brightness(50)
         await panel.async_play_stored(gif, 26, brightness=60)
         await panel.async_send_png(render.to_png(Image.new("RGB", (64, 16))))
         return fake
 
     assert _kinds(asyncio.run(run()).frames) == [
-        "brightness 50", "brightness 30", "playlist [26]", "brightness 50", "png"]
+        "brightness 50", "brightness 30", "playlist [26]", "gif 26", "brightness 50", "png"]
+
+
+def test_only_the_latest_upload_is_trusted():
+    """A panel can lose a stored GIF (slots emptied after other uploads): a slot is
+    skipped only right after its own upload, otherwise sent again."""
+    stored = _load("stored")
+    agent, runner = stored.retro_gif("agent"), stored.retro_gif("runner")
+
+    async def run():
+        fake = RecordingPanel(wide=True)
+        _, panel = _connected_panel(fake)
+        panel.load_stored({"29": binascii.crc32(agent)})  # an earlier run's record is not trusted
+        assert await panel.async_play_stored(agent, 29) is True
+        assert await panel.async_play_stored(agent, 29) is False  # just uploaded
+        assert await panel.async_play_stored(runner, 28) is True
+        assert await panel.async_play_stored(agent, 29) is True   # runner came in between
+        return fake
+
+    assert _kinds(asyncio.run(run()).frames) == [
+        "playlist [29]", "gif 29", "playlist [29]",
+        "playlist [28]", "gif 28", "playlist [29]", "gif 29"]
 
 
 def test_refused_upload_is_not_retried():
@@ -861,8 +881,8 @@ def test_safety_animation_becomes_the_background():
         "playlist [20]", "gif 20", "png",        # live picture back straight away
         "playlist [20]", "png",
         "playlist [29]", "gif 29",
-        "playlist [20]", "png",                  # after an animation: background again
-    ]
+        "playlist [20]", "gif 20", "png",        # after an animation: background again,
+    ]                                            # uploaded again (the animation may have emptied it)
 
 
 def test_safety_frames_are_calm():
