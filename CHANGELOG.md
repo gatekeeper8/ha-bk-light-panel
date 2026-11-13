@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.2
+- Stored animations (retro screens, safety animation, `play_animation`): a panel can lose a
+  stored GIF while the integration still thinks it holds it. Seen on a 64x16 panel: slots
+  emptied after other uploads, and switching to an empty slot froze the screen, so the
+  retro screens hardly ever appeared. There is no way to read a slot back, so now only the
+  upload just made is trusted: a GIF is uploaded again unless it was the very last one.
+  The record saved across restarts is no longer used to skip uploads.
+- The safety animation is uploaded again when the panel goes back to it after another
+  animation, and after every reconnect, so it is really there when the connection drops.
+- The stored runner uses every second drawing step (32 frames, 14 KB instead of 27 KB),
+  so its upload fits comfortably between two clocks.
+
 ## 0.10.1
 - 64x16 clock with a date line: the temperature (line 1) and PM (line 2) beside the
   clock are now drawn in the same small font as the date, temperature level with the

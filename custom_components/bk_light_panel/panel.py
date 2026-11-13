@@ -65,6 +65,12 @@ class BkLightPanel:
         self._unconfirmed_in_row = 0  # pictures missed in a row without receipts
         self._acknowledged_since = 0.0
         self._stored: dict[int, int] = {}  # slot -> CRC of the GIF stored there
+        # The panel can lose a stored GIF while we still think it holds it (seen on a
+        # 64x16 panel: slots emptied after other uploads; switching to an empty slot
+        # freezes the screen). There is no way to read a slot back, so only the
+        # upload just made (slot, CRC) is trusted; anything else is uploaded again.
+        self._last_upload: tuple[int, int] | None = None
+        self._background_gif: bytes | None = None  # the safety animation, put back when needed
         # called with the slot -> CRC map after every upload (saved across restarts)
         self.on_stored_change: Callable[[dict[int, int]], None] | None = None
         self._failed_uploads: dict[int, float] = {}  # slot -> when the panel refused it
@@ -186,8 +192,9 @@ class BkLightPanel:
     async def _upload(self, session: PanelSession, gif: bytes, slot: int, force: bool) -> bool:
         """Store a GIF unless the slot already holds exactly it. True if uploaded."""
         crc = binascii.crc32(gif)
-        if not force and self._stored.get(slot) == crc:
+        if not force and self._last_upload == (slot, crc):
             return False
+        self._last_upload = None
         self._remember(slot, None)  # half-written until the panel confirms
         try:
             await session.send_gif(gif, slot)
@@ -200,6 +207,7 @@ class BkLightPanel:
                 f"{self.name} did not confirm the animation for slot {slot} ({len(gif)} bytes)"
             ) from err
         self._failed_uploads.pop(slot, None)
+        self._last_upload = (slot, crc)
         self._remember(slot, crc)
         _LOGGER.debug("%s: stored %d bytes of animation in slot %d", self.name, len(gif), slot)
         return True
@@ -227,6 +235,12 @@ class BkLightPanel:
         if self._background and self._playlist != self._background:
             await self._command(session, playlist_command(self._background))
             self._playlist = list(self._background)
+            # another upload may have emptied the background's slot: put it back
+            if self._background_gif is not None and len(self._background) == 1:
+                try:
+                    await self._upload(session, self._background_gif, self._background[0], False)
+                except UploadRefused as err:
+                    _LOGGER.debug("%s", err)
         target = self._brightness_target()
         if target is not None and self._brightness != target:
             await self._command(session, brightness_command(target))
@@ -311,6 +325,7 @@ class BkLightPanel:
                 self._last_png = None
 
         self._background = [slot]
+        self._background_gif = gif
         await self._session_call("Setting the safety animation", run)
         return uploaded
 
@@ -319,6 +334,7 @@ class BkLightPanel:
         sent, e.g. while disconnected (the background)."""
         await self._session_call("Setting the playlist", lambda s: s.command(playlist_command(slots)))
         self._playlist = self._background = list(slots)
+        self._background_gif = None  # a playlist of the user's own slots: theirs to keep
         self._last_png = None
 
     async def async_set_brightness(self, level: int) -> None:
@@ -365,6 +381,7 @@ class BkLightPanel:
             self._brightness = None
         if self._background:
             self._playlist = None
+        self._last_upload = None  # the panel may have been off: upload again before playing
 
     @callback
     def _on_disconnected(self, _client: object) -> None:
