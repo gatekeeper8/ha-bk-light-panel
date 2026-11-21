@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.3
+- A Bluetooth call that never returned could freeze a panel for hours: after a run of
+  dropped connections (GATT error 133) through an ESPHome proxy, one call hung while
+  holding the panel's lock, so every later picture was silently skipped and the panel
+  played its stored safety animation all night. Every GATT write, the notification
+  subscription and the disconnect now give up after 10 s; the send then reconnects and
+  retries like after any dropped write.
+
 ## 0.10.2
 - Stored animations (retro screens, safety animation, `play_animation`): a panel can lose a
   stored GIF while the integration still thinks it holds it. Seen on a 64x16 panel: slots

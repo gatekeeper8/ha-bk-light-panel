@@ -31,6 +31,10 @@ FRAME_VALIDATION = bytes.fromhex("05 00 00 01 00")
 VALIDATION_EVERY: int | None = None
 
 ACK_TIMEOUT = 5.0
+# a single GATT operation (write, notify subscription). Through an ESPHome proxy a
+# call was seen to never return after a broken link, holding the panel's lock for
+# 10 hours; with a limit it fails like any dropped write and is retried.
+GATT_TIMEOUT = 10.0
 STEP_DELAY = 0.2
 
 
@@ -124,7 +128,7 @@ class PanelSession:
         self._command_acks: dict[int, asyncio.Event] = {}
 
     async def start(self) -> None:
-        await self._client.start_notify(UUID_NOTIFY, self._on_notify)
+        await asyncio.wait_for(self._client.start_notify(UUID_NOTIFY, self._on_notify), GATT_TIMEOUT)
 
     def _on_notify(self, _sender: Any, data: bytearray) -> None:
         payload = bytes(data)
@@ -140,7 +144,8 @@ class PanelSession:
             self._command_acks[command].set()
 
     async def _write(self, data: bytes, response: bool) -> None:
-        await self._client.write_gatt_char(UUID_WRITE, data, response=response)
+        await asyncio.wait_for(
+            self._client.write_gatt_char(UUID_WRITE, data, response=response), GATT_TIMEOUT)
 
     async def _handshake(self) -> None:
         self._stage_one.clear()
