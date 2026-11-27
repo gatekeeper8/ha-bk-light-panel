@@ -931,3 +931,27 @@ def test_brightness_and_background_come_back_after_a_reconnect():
         "brightness 30", "playlist [21]", "gif 21", "png",
         "playlist [21]", "brightness 30", "png",
     ]
+
+
+def test_a_hanging_write_does_not_block_the_panel(monkeypatch):
+    """A GATT write that never returns (seen through an ESPHome proxy after a broken
+    link) must fail within GATT_TIMEOUT, and the next send must connect afresh."""
+    monkeypatch.setattr(protocol, "GATT_TIMEOUT", 0.05)
+    png = render.to_png(Image.new("RGB", (64, 16), (60, 0, 0)))
+
+    class HangingOnce(RecordingPanel):
+        hang = True
+
+        async def write_gatt_char(self, uuid, data, response):
+            if HangingOnce.hang:
+                HangingOnce.hang = False
+                await asyncio.Event().wait()  # never returns
+            await super().write_gatt_char(uuid, data, response)
+
+    async def run():
+        fake = HangingOnce(wide=True)
+        panel_mod, panel = _connected_panel(fake)
+        await asyncio.wait_for(panel.async_send_png(png), 2)  # retried after the hang
+        return fake
+
+    assert _kinds(asyncio.run(run()).frames) == ["png"]

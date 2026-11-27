@@ -30,7 +30,13 @@ from .const import (
     UNCONFIRMED_LIMIT,
     UPLOAD_RETRY_HOURS,
 )
-from .protocol import FrameNotConfirmed, PanelSession, brightness_command, playlist_command
+from .protocol import (
+    GATT_TIMEOUT,
+    FrameNotConfirmed,
+    PanelSession,
+    brightness_command,
+    playlist_command,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -422,9 +428,9 @@ class BkLightPanel:
         if client is not None:
             self._closing = True
             try:
-                await client.disconnect()
-            except BleakError:
-                pass
+                await asyncio.wait_for(client.disconnect(), GATT_TIMEOUT)
+            except (BleakError, TimeoutError, OSError):
+                pass  # gone either way: the next send connects afresh
             finally:
                 self._closing = False
 
