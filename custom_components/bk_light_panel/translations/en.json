@@ -232,7 +232,7 @@
       "fields": {
         "url": {
           "name": "Data URL",
-          "description": "Address of aircraft.json, e.g. http://adsb-receiver.local:8080/data/aircraft.json."
+          "description": "Full address of the aircraft.json file served by your ADS-B decoder (readsb, dump1090 or tar1090)."
         },
         "max_distance": {
           "name": "Maximum distance",
