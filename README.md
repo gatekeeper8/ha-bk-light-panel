@@ -158,7 +158,7 @@ data:
 ```yaml
 action: bk_light_panel.show_nearest_aircraft
 data:
-  url: http://adsb-receiver.local:8080/data/aircraft.json
+  url: http://<decoder-host>:8080/data/aircraft.json
   max_distance: 80
 response_variable: plane   # found, callsign, type, country, distance_km, altitude_m, ...
 ```
